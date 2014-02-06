@@ -1,0 +1,1 @@
+/home/sbhuang/tools/uboot/u-boot-test/cpu/mips/jz_ddr2_init.c
