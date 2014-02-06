@@ -78,6 +78,8 @@ int main (int argc, char *argv[])
 	short val;
 #elif LCD_BPP==5
 	int val;
+#else
+        int val;
 #endif
 #endif
 

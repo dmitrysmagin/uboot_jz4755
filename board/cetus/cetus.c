@@ -26,6 +26,7 @@
 #define ADD_BOOTPIC 
 #ifdef ADD_BOOTPIC 
 #include "bootpic1.h"
+#if 0
 //#include "bootpic2.h"
 #include "bootpic3.h"
 //#include "bootpic4.h"
@@ -40,6 +41,7 @@
 #include "bootpic13.h"
 //#include "bootpic14.h"
 #include "bootpic15.h"
+#endif
 #endif
 
 
@@ -145,7 +147,7 @@ static void gpio_init(void)
 	__gpio_as_i2c();
 	__cpm_start_i2c();
 }
-static int power_off_ub(void)
+int power_off_ub(void)
 {
 	//printf("Put CPU into hibernate mode.\n");
 
@@ -293,13 +295,22 @@ void ready_bootpic_mem(void)
 {
   short *p = 0x83000000;
   int i;
-  printf("%s %d\n",__FILE__,__LINE__);
-  for( i = 0; i < 400*240; i++)
+  //printf("%s %d\n",__FILE__,__LINE__);
+  for( i = 0; i < 480*272; i++)
   {
     *p = l009_bootpic1[i];
     p++;
   }
-  printf("%s %d\n",__FILE__,__LINE__);
+  const unsigned short carlos_sexi[8] = {0x23,0x83,0xe1,0x38,0x24,0xf0,0x23,0x45};
+  for(  i = 0; i < 8; i += 1)
+  {
+    *p++ = carlos_sexi[i];
+  }
+
+  //printf("%s %d\n",__FILE__,__LINE__);
+  flush_cache_all();
+  return;
+
  
 #if 0
   for( i = 0; i < 400*240; i++)
@@ -308,6 +319,7 @@ void ready_bootpic_mem(void)
     p++;
   }
 #endif
+#if 0
   for( i = 0; i < 400*240; i++)
   {
     *p = l009_bootpic3[i];
@@ -400,6 +412,7 @@ printf("%s %d\n",__FILE__,__LINE__);
   printf("%s %d\n",__FILE__,__LINE__);
  
   flush_cache_all();
+#endif
 }
 #endif
 unsigned int mv = 0;
@@ -468,11 +481,23 @@ unsigned int get_second_time_battery(void)
   return date_diff2;
 }
 unsigned int date_diff1,date_diff2;
+int get_battery_mv(void)
+{
+  mv = 0;
+  date_diff1 = get_first_time_battery();
+  date_diff2 = get_second_time_battery();
+
+  if(date_diff1 >= date_diff2)
+    mv = mv_array_2[COUNT_TIMES];
+  else
+    mv = mv_array_1[COUNT_TIMES];
+  return mv;
+}
 void board_early_init(void)
 {
   gpio_init();
   sadc_init_clock(3);
-  mv = get_battery_val();
+//  mv = get_battery_val();
   int i;
   mv = 0;
   date_diff1 = get_first_time_battery();
@@ -564,16 +589,22 @@ int checkboard (void)
 	printf("%s Board: Ingenic CETUS (CPU Speed %d MHz)\n",__TIME__,
 	       gd->cpu_clk/1000000);
 
-        printf(" %s %s mv is %d read_count is %d\n",__TIME__,__FUNCTION__,mv,read_count);
-        while (!(REG_RTC_RCR & RTC_RCR_WRDY));
-        printf("REG_RTC_HWFCR is 0x%x\n",REG_RTC_HWFCR);
-        printf_test_rtc(); 
-        //led_flush_test(1);  
-        if(mv < 3350 )
-          power_off_ub();
 #ifdef ADD_BOOTPIC 
         ready_bootpic_mem();
 #endif
+        return 0;
+
+        printf(" %s %s mv is %d read_count is %d\n",__TIME__,__FUNCTION__,mv,read_count);
+        //while (!(REG_RTC_RCR & RTC_RCR_WRDY));
+        //printf("REG_RTC_HWFCR is 0x%x\n",REG_RTC_HWFCR);
+        //printf_test_rtc(); 
+        //led_flush_test(1);  
+        if(mv < 3350 )
+          power_off_ub();
+       display_battery_null();
+        extern void turn_lcd_backlight(int i);
+        turn_lcd_backlight(100);
+        while(1);
         return 0; /* success */
 }
 
