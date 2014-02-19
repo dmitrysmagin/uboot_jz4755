@@ -1,0 +1,52 @@
+//for config&compile uboot & mbr, androidkaka@gmail.com/ShenZhen,China
+
+NOTICE: If you want to change the source, pls read the following first:
+
+For the first batch of 320e board, because Ingenic JZ4755 donot support the nand (12bit ecc, 218bit OOB) under linux, so we need to put kernel&rootfs to TF card/MMC1, the boot step is: uboot(on nand) to boot minios/linux, minios img are on nand, linux img& rootfs are on tf card, pls do it yourself.
+
+1. cross-compile tools setting
+	#export PATH=/opt/mipseltools-gcc412-glibc261/bin/:$PATH
+
+2. config
+(1) for u-boot-nand
+	The default boot system will be minios, if you press "SELECT" key & reset, system will be boot as dingux 
+	
+	Q: if I want enable LCD, how to do?
+	A: pls porting from the kernel source, we donot add it here
+
+	Q: if I want to change a key for linux boot, how to do?
+	A: First, Pls do not use Start Key, because Start key use for JZ4755 to burn mode, Second, you can change the key gpio in include/configs/320e.h, Left: GPD27, Right: GPE19, Up: GPD26, Down: GPE18, A:GPD17, B: GPE0 , X: GPC23, Y:GPC24, Select: GPE10, Start:GPE11, CL:GPD25, CR: GPD16
+	
+	Q: if I want to boot default as dingux but not minios, how to do?
+	A: pls change two place: first is function named spl_boot() in nand_spl/nand_boot_jz4750.c, change line " __gpio_get_pin(UBOOT_SEL_DUALBOOT_KEY) ==1" to "__gpio_get_pin(UBOOT_SEL_DUALBOOT_KEY) ==0", this is the first stage judge; second is function named jz_dualboot_handle() in cpu/mips/jz_dualboot.c, change the end of the function, exchange the 4 line end. you also can delete the judge, because it's no use infact.
+
+(2) for mbr
+	The default mbr.bin will be generate for 4GB card, you can change the partition table in include/configs/320e.h, you also can use fdisk to do it
+
+	Q: why need to use MBR?
+	A: for uImage/appfs/cfgfs need to dd to tf card, so you need to change the partition of your tf card to boot dingux
+
+	Q: if I use a card not 4GB size, how to do?
+	A: you need to change MBR_P1_SIZE, the size will be (tfcard size - p2 -p3 -p4), and then change value of MBR_PX_OFFSET
+
+	Q: why MBR_P1 need to be VFAT?
+        A: because windows system will default open partition 1, so this partition should be user space
+
+	Q: can I change partition 2 -4 ?
+	A: now, partition 1: start from 0x800000, because default save 8M for MBR, ofcourse it need not 8M in fact.
+		partition 2: for rootfs
+		partition 3: for appfs
+		partition 4: for cfgfs
+
+	   if you want to change P2-P4, you need to change the bootargs in include/configs/320e.h, as the line "LINUX_CMDLINE0", you need to change "root=/mmcblk0pX", X is the parition number of rootfs, and you need to change partition number in rootfs & appfs, there's mount point wrote
+
+	Q: can I change the size of partition X freely?
+	A: no, at least, the size should be 512*N, because 512 is the sector size 
+
+3. compile
+(1) compile for u-boot-nand.bin
+	#make 320e_dualboot_config;
+	#make
+(2) compile for mbr.bin
+	#make 320e_mbr_config;
+	#make

@@ -1,0 +1,1 @@
+/home/qrchen/linux_12.26_all/uboot/u-boot-1.1.6/msc_spl/msc_boot_jz4750.c
