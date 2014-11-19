@@ -32,6 +32,11 @@
 extern int gt6426x_eth_initialize(bd_t *bis);
 #endif
 
+#ifdef CONFIG_DRIVER_AX88796C
+extern int ax88796c_initialize (bd_t*);
+#else
+extern int jz_enet_initialize(bd_t*);
+#endif
 extern int au1x00_enet_initialize(bd_t*);
 extern int dc21x4x_initialize(bd_t*);
 extern int e1000_initialize(bd_t*);
@@ -215,6 +220,14 @@ int eth_initialize(bd_t *bis)
 #if defined(FEC_ENET) || defined(CONFIG_ETHER_ON_FCC)
 	fec_initialize(bis);
 #endif
+#if defined(CONFIG_JZSOC)
+#ifdef CONFIG_DRIVER_AX88796C
+	ax88796c_initialize(bis);
+#else
+   	jz_enet_initialize(bis);
+#endif
+#endif
+
 #if defined(CONFIG_AU1X00)
 	au1x00_enet_initialize(bis);
 #endif

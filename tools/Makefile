@@ -21,10 +21,10 @@
 # MA 02111-1307 USA
 #
 
-BIN_FILES	= img2srec$(SFX) mkimage$(SFX) envcrc$(SFX) gen_eth_addr$(SFX) bmp_logo$(SFX)
+BIN_FILES	= img2srec$(SFX) mkimage$(SFX) envcrc$(SFX) gen_eth_addr$(SFX) bmp_logo$(SFX) mkuartconfig$(SFX)
 
 OBJ_LINKS	= environment.o crc32.o
-OBJ_FILES	= img2srec.o mkimage.o envcrc.o gen_eth_addr.o bmp_logo.o
+OBJ_FILES	= img2srec.o mkimage.o envcrc.o gen_eth_addr.o bmp_logo.o mkuartconfig.o
 
 ifeq ($(ARCH),mips)
 BIN_FILES	+= inca-swap-bytes$(SFX)
@@ -157,6 +157,11 @@ $(obj)mpc86x_clk$(SFX):	$(obj)mpc86x_clk.o
 		$(CC) $(CFLAGS) $(HOST_LDFLAGS) -o $@ $^
 		$(STRIP) $@
 
+$(obj)mkuartconfig$(SFX): $(obj)mkuartconfig.o
+		$(CC) $(CFLAGS) $(HOST_LDFLAGS) -o $@ $^
+		$(STRIP) $@
+		./mkuartconfig
+
 $(obj)envcrc.o:	$(src)envcrc.c
 		$(CC) -g $(CFLAGS) -c -o $@ $<
 
@@ -176,6 +181,9 @@ $(obj)inca-swap-bytes.o:	$(src)inca-swap-bytes.c
 		$(CC) -g $(CFLAGS) -c -o $@ $<
 
 $(obj)mpc86x_clk.o:	$(src)mpc86x_clk.c
+		$(CC) -g $(CFLAGS) -c -o $@ $<
+
+$(obj)mkuartconfig.o: $(src)mkuartconfig.c
 		$(CC) -g $(CFLAGS) -c -o $@ $<
 
 subdirs:

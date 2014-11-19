@@ -7,7 +7,7 @@
 #
 # This program is free software; you can redistribute it and/or
 # modify it under the terms of the GNU General Public License as
-# published by the Free Software Foundatio; either version 2 of
+# published by the Free Software Foundation; either version 2 of
 # the License, or (at your option) any later version.
 #
 # This program is distributed in the hope that it will be useful,
@@ -20,6 +20,7 @@
 # Foundation, Inc., 59 Temple Place, Suite 330, Boston,
 # MA 02111-1307 USA
 #
+
 
 VERSION = 1
 PATCHLEVEL = 1
@@ -135,7 +136,7 @@ CROSS_COMPILE = i386-linux-
 endif
 endif
 ifeq ($(ARCH),mips)
-CROSS_COMPILE = mips_4KC-
+CROSS_COMPILE = mipsel-linux-
 endif
 ifeq ($(ARCH),nios)
 CROSS_COMPILE = nios-elf-
@@ -207,7 +208,7 @@ LIBS += drivers/libdrivers.a
 LIBS += drivers/nand/libnand.a
 LIBS += drivers/nand_legacy/libnand_legacy.a
 LIBS += drivers/sk98lin/libsk98lin.a
-LIBS += post/libpost.a post/cpu/libcpu.a
+LIBS += post/ingenic/libingenic_post.a
 LIBS += common/libcommon.a
 LIBS += $(BOARDLIBS)
 
@@ -221,13 +222,29 @@ PLATFORM_LIBS += -L $(shell dirname `$(CC) $(CFLAGS) -print-libgcc-file-name`) -
 # Don't include stuff already done in $(LIBS)
 SUBDIRS	= tools \
 	  examples \
-	  post \
-	  post/cpu
+	  post/ingenic
 .PHONY : $(SUBDIRS)
 
 ifeq ($(CONFIG_NAND_U_BOOT),y)
+ifneq ($(CONFIG_MSC_U_BOOT),y)
 NAND_SPL = nand_spl
 U_BOOT_NAND = $(obj)u-boot-nand.bin
+endif
+endif
+
+ifeq ($(CONFIG_MSC_U_BOOT),y)
+MSC_SPL = msc_spl
+U_BOOT_MSC = $(obj)u-boot-msc.bin
+ifeq ($(CONFIG_MBR_UBOOT),y)
+MBR_UBOOT = $(obj)mbr-uboot-msc.bin
+MBR       = $(obj)mbr.bin
+.PHONY: $(MBR)
+endif
+endif
+
+ifeq ($(CONFIG_SPI_U_BOOT),y)
+SPI_SPL = spi_spl
+U_BOOT_SPI = $(obj)u-boot-spi.bin
 endif
 
 __OBJS := $(subst $(obj),,$(OBJS))
@@ -236,7 +253,8 @@ __LIBS := $(subst $(obj),,$(LIBS))
 #########################################################################
 #########################################################################
 
-ALL = $(obj)u-boot.srec $(obj)u-boot.bin $(obj)System.map $(U_BOOT_NAND)
+ALL = $(obj)u-boot.srec $(obj)u-boot.bin $(obj)System.map $(U_BOOT_NAND) \
+	$(U_BOOT_MSC) $(U_BOOT_SPI)  $(MBR_UBOOT)
 
 all:		$(ALL)
 
@@ -278,8 +296,27 @@ $(NAND_SPL):	version
 		$(MAKE) -C nand_spl/board/$(BOARDDIR) all
 
 $(U_BOOT_NAND):	$(NAND_SPL) $(obj)u-boot.bin
-		cat $(obj)nand_spl/u-boot-spl-16k.bin $(obj)u-boot.bin > $(obj)u-boot-nand.bin
+		cat $(obj)nand_spl/u-boot-spl-pad.bin $(obj)u-boot.bin > $(obj)u-boot-nand.bin
 
+$(MSC_SPL):	version
+		$(MAKE) -C msc_spl/board/$(BOARDDIR) all
+
+$(U_BOOT_MSC):	$(MSC_SPL) $(obj)u-boot.bin
+		cat $(obj)msc_spl/u-boot-spl-pad.bin $(obj)u-boot.bin > $(obj)u-boot-msc.bin
+
+$(SPI_SPL):	version
+		$(MAKE) -C spi_spl/board/$(BOARDDIR) all
+
+$(U_BOOT_SPI):	$(SPI_SPL) $(obj)u-boot.bin
+		cat $(obj)spi_spl/u-boot-spl-pad.bin $(obj)u-boot.bin > $(obj)u-boot-spi.bin
+
+$(MBR_UBOOT):  $(U_BOOT_MSC) $(MBR)
+		cat $(MBR) $(U_BOOT_MSC) > $@
+$(MBR): 
+		gcc -I$(obj)include $(obj)tools/mbr/mkmbr.c -o $(obj)tools/mbr/mkmbr;\
+		rm -f $@;\
+		$(obj)tools/mbr/mkmbr $@
+	    
 version:
 		@echo -n "#define U_BOOT_VERSION \"U-Boot " > $(VERSION_FILE); \
 		echo -n "$(U_BOOT_VERSION)" >> $(VERSION_FILE); \
@@ -2083,6 +2120,830 @@ incaip_config: unconfig
 
 tb0229_config: unconfig
 	@$(MKCONFIG) $(@:_config=) mips mips tb0229
+#########################################################################
+## MIPS32 Jz4XXX
+#########################################################################
+f4770_config		: 	unconfig
+	@echo "#define CONFIG_F4770 1" >>include/config.h
+	@echo "#define CONFIG_SDRAM_MDDR" >> $(obj)include/config.h
+	@echo "Compile NOR boot image for f4770"
+	@echo "#define CONFIG_F4770 1" >>include/config.h
+	@./mkconfig -a f4770 mips mips f4770
+	@echo "CONFIG_CPU_TYPE = 4770" >> $(obj)include/config.mk
+	@echo "CONFIG_USE_MDDR = y" >> $(obj)include/config.mk
+	@echo "CONFIG_USE_DDR1 = n" >> $(obj)include/config.mk
+	@echo "CONFIG_USE_DDR2 = n" >> $(obj)include/config.mk
+
+f4770_nand_config	:	unconfig
+	@echo "#define CONFIG_NAND_U_BOOT" > $(obj)include/config.h
+	@echo "#define CONFIG_SDRAM_MDDR" >> $(obj)include/config.h
+	@echo "Compile NAND boot image for f4770"
+	@./mkconfig -a f4770 mips mips f4770
+	@echo "TEXT_BASE = 0x80100000" > $(obj)board/f4770/config.tmp
+	@echo "CONFIG_NAND_U_BOOT = y" >> $(obj)include/config.mk
+	@echo "CONFIG_CPU_TYPE = 4770" >> $(obj)include/config.mk
+	@echo "CONFIG_USE_MDDR = y" >> $(obj)include/config.mk
+	@echo "CONFIG_USE_DDR1 = n" >> $(obj)include/config.mk
+	@echo "CONFIG_USE_DDR2 = n" >> $(obj)include/config.mk
+	@echo "CONFIG_USE_SDRAM = n" >> $(obj)include/config.mk
+
+f4770_nand_ddr2_config	:	unconfig
+	@echo "#define CONFIG_NAND_U_BOOT" > $(obj)include/config.h
+	@echo "#define CONFIG_SDRAM_DDR2" >> $(obj)include/config.h
+	@echo "Compile NAND boot image for f4770"
+	@./mkconfig -a f4770 mips mips f4770
+	@echo "TEXT_BASE = 0x80100000" > $(obj)board/f4770/config.tmp
+	@echo "CONFIG_NAND_U_BOOT = y" >> $(obj)include/config.mk
+	@echo "CONFIG_CPU_TYPE = 4770" >> $(obj)include/config.mk
+	@echo "CONFIG_USE_MDDR = n" >> $(obj)include/config.mk
+	@echo "CONFIG_USE_DDR1 = n" >> $(obj)include/config.mk
+	@echo "CONFIG_USE_DDR2 = y" >> $(obj)include/config.mk
+	@echo "CONFIG_USE_SDRAM = n" >> $(obj)include/config.mk
+
+f4770_spi_config	:	unconfig
+	@echo "#define CONFIG_SPI_U_BOOT" > $(obj)include/config.h
+	@echo "#define CONFIG_SDRAM_MDDR" >> $(obj)include/config.h
+	@echo "Compile SPI boot image for f4770"
+	@./mkconfig -a f4770 mips mips f4770
+	@echo "TEXT_BASE = 0x80100000" > $(obj)board/f4770/config.tmp
+	@echo "CONFIG_SPI_U_BOOT = y" >> $(obj)include/config.mk
+	@echo "CONFIG_CPU_TYPE = 4770" >> $(obj)include/config.mk
+	@echo "CONFIG_USE_MDDR = y" >> $(obj)include/config.mk
+	@echo "CONFIG_USE_DDR1 = n" >> $(obj)include/config.mk
+	@echo "CONFIG_USE_DDR2 = n" >> $(obj)include/config.mk
+	@echo "CONFIG_USE_SDRAM = n" >> $(obj)include/config.mk
+
+f4770_msc_config	:	unconfig
+	@echo "#define CONFIG_MSC_U_BOOT" > $(obj)include/config.h
+	@echo "#define CONFIG_SDRAM_MDDR" >> $(obj)include/config.h
+	@echo "Compile MSC boot image for f4770"
+	@./mkconfig -a f4770 mips mips f4770
+	@echo "TEXT_BASE = 0x80100200" > $(obj)board/f4770/config.tmp
+	@echo "CONFIG_MSC_U_BOOT = y" >> $(obj)include/config.mk
+	@echo "CONFIG_CPU_TYPE = 4770" >> $(obj)include/config.mk
+	@echo "CONFIG_USE_MDDR = y" >> $(obj)include/config.mk
+	@echo "CONFIG_USE_DDR1 = n" >> $(obj)include/config.mk
+	@echo "CONFIG_USE_DDR2 = n" >> $(obj)include/config.mk
+	@echo "CONFIG_USE_SDRAM = n" >> $(obj)include/config.mk
+
+f4810_config		: 	unconfig
+	@echo "#define CONFIG_F4810 1" >>include/config.h
+	@echo "#define CONFIG_SDRAM_MDDR" >> $(obj)include/config.h
+	@echo "Compile NOR boot image for f4810"
+	@echo "#define CONFIG_F4810 1" >>include/config.h
+	@./mkconfig -a f4810 mips mips f4810
+	@echo "CONFIG_CPU_TYPE = 4810" >> $(obj)include/config.mk
+	@echo "CONFIG_USE_MDDR = y" >> $(obj)include/config.mk
+	@echo "CONFIG_USE_DDR1 = n" >> $(obj)include/config.mk
+	@echo "CONFIG_USE_DDR2 = n" >> $(obj)include/config.mk
+
+f4810_nand_config	:	unconfig
+	@echo "#define CONFIG_NAND_U_BOOT" > $(obj)include/config.h
+	@echo "#define CONFIG_SDRAM_MDDR" >> $(obj)include/config.h
+	@echo "Compile NAND boot image for f4810"
+	@./mkconfig -a f4810 mips mips f4810
+	@echo "TEXT_BASE = 0x80100000" > $(obj)board/f4810/config.tmp
+	@echo "CONFIG_NAND_U_BOOT = y" >> $(obj)include/config.mk
+	@echo "CONFIG_CPU_TYPE = 4810" >> $(obj)include/config.mk
+	@echo "CONFIG_USE_MDDR = y" >> $(obj)include/config.mk
+	@echo "CONFIG_USE_DDR1 = n" >> $(obj)include/config.mk
+	@echo "CONFIG_USE_DDR2 = n" >> $(obj)include/config.mk
+	@echo "CONFIG_USE_SDRAM = n" >> $(obj)include/config.mk
+
+f4810_spi_config	:	unconfig
+	@echo "#define CONFIG_SPI_U_BOOT" > $(obj)include/config.h
+	@echo "#define CONFIG_SDRAM_MDDR" >> $(obj)include/config.h
+	@echo "Compile SPI boot image for f4810"
+	@./mkconfig -a f4810 mips mips f4810
+	@echo "TEXT_BASE = 0x80100000" > $(obj)board/f4810/config.tmp
+	@echo "CONFIG_SPI_U_BOOT = y" >> $(obj)include/config.mk
+	@echo "CONFIG_CPU_TYPE = 4810" >> $(obj)include/config.mk
+	@echo "CONFIG_USE_MDDR = y" >> $(obj)include/config.mk
+	@echo "CONFIG_USE_DDR1 = n" >> $(obj)include/config.mk
+	@echo "CONFIG_USE_DDR2 = n" >> $(obj)include/config.mk
+	@echo "CONFIG_USE_SDRAM = n" >> $(obj)include/config.mk
+
+f4810_msc_config	:	unconfig
+	@echo "#define CONFIG_MSC_U_BOOT" > $(obj)include/config.h
+	@echo "#define CONFIG_SDRAM_MDDR" >> $(obj)include/config.h
+	@echo "Compile MSC boot image for f4810"
+	@./mkconfig -a f4810 mips mips f4810
+	@echo "TEXT_BASE = 0x80100200" > $(obj)board/f4810/config.tmp
+	@echo "CONFIG_MSC_U_BOOT = y" >> $(obj)include/config.mk
+	@echo "CONFIG_CPU_TYPE = 4810" >> $(obj)include/config.mk
+	@echo "CONFIG_USE_MDDR = y" >> $(obj)include/config.mk
+	@echo "CONFIG_USE_DDR1 = n" >> $(obj)include/config.mk
+	@echo "CONFIG_USE_DDR2 = n" >> $(obj)include/config.mk
+	@echo "CONFIG_USE_SDRAM = n" >> $(obj)include/config.mk
+
+lepus_spi_config:	unconfig
+	@echo "#define CONFIG_SPI_U_BOOT" > $(obj)include/config.h
+	@echo "#define CONFIG_SDRAM_DDR2" >> $(obj)include/config.h
+	@echo "Compile SPI boot image for lepus"
+	@./mkconfig -a lepus mips mips lepus
+	@echo "TEXT_BASE = 0x80100000" > $(obj)board/lepus/config.tmp
+	@echo "CONFIG_SPI_U_BOOT = y" >> $(obj)include/config.mk
+	@echo "CONFIG_CPU_TYPE = 4760" >> $(obj)include/config.mk
+	@echo "CONFIG_USE_MDDR = n" >> $(obj)include/config.mk
+	@echo "CONFIG_USE_DDR1 = n" >> $(obj)include/config.mk
+	@echo "CONFIG_USE_DDR2 = y" >> $(obj)include/config.mk
+	@echo "CONFIG_USE_SDRAM = n" >> $(obj)include/config.mk
+
+lepus_msc_config:	unconfig
+	@echo "#define CONFIG_MSC_U_BOOT" > $(obj)include/config.h
+	@echo "#define CONFIG_SDRAM_DDR2" >> $(obj)include/config.h
+	@echo "Compile MSC boot image for lepus"
+	@./mkconfig -a lepus mips mips lepus
+	@echo "TEXT_BASE = 0x80100200" > $(obj)board/lepus/config.tmp
+	@echo "CONFIG_MSC_U_BOOT = y" >> $(obj)include/config.mk
+	@echo "CONFIG_CPU_TYPE = 4760" >> $(obj)include/config.mk
+	@echo "CONFIG_USE_MDDR = n" >> $(obj)include/config.mk
+	@echo "CONFIG_USE_DDR1 = n" >> $(obj)include/config.mk
+	@echo "CONFIG_USE_DDR2 = y" >> $(obj)include/config.mk
+	@echo "CONFIG_USE_SDRAM = n" >> $(obj)include/config.mk
+
+lepus_msc_recovery_config:	unconfig
+	@echo "#define CONFIG_MSC_U_BOOT" > $(obj)include/config.h
+	@echo "#define CONFIG_JZ_RECOVERY">> $(obj)include/config.h
+	@echo "#define CONFIG_SDRAM_DDR2" >> $(obj)include/config.h
+	@echo "Compile MSC boot image for lepus"
+	@./mkconfig -a lepus mips mips lepus
+	@echo "TEXT_BASE = 0x80100200" > $(obj)board/lepus/config.tmp
+	@echo "CONFIG_MSC_U_BOOT = y" >> $(obj)include/config.mk
+	@echo "CONFIG_CPU_TYPE = 4760" >> $(obj)include/config.mk
+	@echo "CONFIG_USE_MDDR = n" >> $(obj)include/config.mk
+	@echo "CONFIG_USE_DDR1 = n" >> $(obj)include/config.mk
+	@echo "CONFIG_USE_DDR2 = y" >> $(obj)include/config.mk
+	@echo "CONFIG_USE_SDRAM = n" >> $(obj)include/config.mk
+	@echo "CONFIG_JZ_RECOVERY = y" >> $(obj)include/config.mk
+	@echo "CONFIG_MBR_UBOOT = y" >> $(obj)include/config.mk
+
+lepus_nand_config:	unconfig
+	@echo "#define CONFIG_NAND_U_BOOT" > $(obj)include/config.h
+	@echo "#define CONFIG_SDRAM_DDR2" >> $(obj)include/config.h
+	@echo "Compile NAND boot image for lepus"
+	@./mkconfig -a lepus mips mips lepus
+	@echo "TEXT_BASE = 0x80100000" > $(obj)board/lepus/config.tmp
+	@echo "CONFIG_NAND_U_BOOT = y" >> $(obj)include/config.mk
+	@echo "CONFIG_CPU_TYPE = 4760" >> $(obj)include/config.mk
+	@echo "CONFIG_USE_MDDR = n" >> $(obj)include/config.mk
+	@echo "CONFIG_USE_DDR1 = n" >> $(obj)include/config.mk
+	@echo "CONFIG_USE_DDR2 = y" >> $(obj)include/config.mk
+	@echo "CONFIG_USE_SDRAM = n" >> $(obj)include/config.mk
+
+lepus_nand_fw_config:	unconfig
+	@echo "#define CONFIG_NAND_U_BOOT" > $(obj)include/config.h
+	@echo "#define CONFIG_AS_USB_BOOT" >> $(obj)include/config.h
+	@echo "#define CONFIG_SDRAM_DDR2" >> $(obj)include/config.h
+	@echo "Compile NAND boot image for lepus"
+	@./mkconfig -a lepus mips mips lepus
+	@echo "TEXT_BASE = 0x80100000" > $(obj)board/lepus/config.tmp
+	@echo "CONFIG_NAND_U_BOOT = y" >> $(obj)include/config.mk
+	@echo "CONFIG_SPL_AS_USB_BOOT = y" >> $(obj)include/config.mk
+	@echo "CONFIG_CPU_TYPE = 4760" >> $(obj)include/config.mk
+	@echo "CONFIG_USE_MDDR = n" >> $(obj)include/config.mk
+	@echo "CONFIG_USE_DDR1 = n" >> $(obj)include/config.mk
+	@echo "CONFIG_USE_DDR2 = y" >> $(obj)include/config.mk
+	@echo "CONFIG_USE_SDRAM = n" >> $(obj)include/config.mk
+
+lepus_nand_recovery_config:	unconfig
+	@echo "#define CONFIG_NAND_U_BOOT" > $(obj)include/config.h
+	@echo "#define CONFIG_JZ_RECOVERY">> $(obj)include/config.h
+	@echo "#define CONFIG_SDRAM_DDR2" >> $(obj)include/config.h
+	@echo "Compile NAND boot image for lepus"
+	@./mkconfig -a lepus mips mips lepus
+	@echo "TEXT_BASE = 0x80100000" > $(obj)board/lepus/config.tmp
+	@echo "CONFIG_NAND_U_BOOT = y" >> $(obj)include/config.mk
+	@echo "CONFIG_CPU_TYPE = 4760" >> $(obj)include/config.mk
+	@echo "CONFIG_USE_MDDR = n" >> $(obj)include/config.mk
+	@echo "CONFIG_USE_DDR1 = n" >> $(obj)include/config.mk
+	@echo "CONFIG_USE_DDR2 = y" >> $(obj)include/config.mk
+	@echo "CONFIG_USE_SDRAM = n" >> $(obj)include/config.mk
+	@echo "CONFIG_JZ_RECOVERY = y" >> $(obj)include/config.mk
+
+lepus60b_nand_config:	unconfig
+	@echo "#define CONFIG_NAND_U_BOOT" > $(obj)include/config.h
+	@echo "#define CONFIG_SDRAM_DDR2" >> $(obj)include/config.h
+	@echo "Compile NAND boot image for lepus60b"
+	@./mkconfig -a lepus60b mips mips lepus60b
+	@echo "TEXT_BASE = 0x80100000" > $(obj)board/lepus60b/config.tmp
+	@echo "CONFIG_NAND_U_BOOT = y" >> $(obj)include/config.mk
+	@echo "CONFIG_CPU_TYPE = 4760b" >> $(obj)include/config.mk
+	@echo "CONFIG_USE_MDDR = n" >> $(obj)include/config.mk
+	@echo "CONFIG_USE_DDR1 = n" >> $(obj)include/config.mk
+	@echo "CONFIG_USE_DDR2 = y" >> $(obj)include/config.mk
+	@echo "CONFIG_USE_SDRAM = n" >> $(obj)include/config.mk
+	
+lepus60b_nand_recovery_config:	unconfig
+	@echo "#define CONFIG_NAND_U_BOOT" > $(obj)include/config.h
+	@echo "#define CONFIG_JZ_RECOVERY">> $(obj)include/config.h
+	@echo "#define CONFIG_SDRAM_DDR2" >> $(obj)include/config.h
+	@echo "Compile NAND boot image for lepus60b"
+	@./mkconfig -a lepus60b mips mips lepus60b
+	@echo "TEXT_BASE = 0x80100000" > $(obj)board/lepus60b/config.tmp
+	@echo "CONFIG_NAND_U_BOOT = y" >> $(obj)include/config.mk
+	@echo "CONFIG_CPU_TYPE = 4760b" >> $(obj)include/config.mk
+	@echo "CONFIG_USE_MDDR = n" >> $(obj)include/config.mk
+	@echo "CONFIG_USE_DDR1 = n" >> $(obj)include/config.mk
+	@echo "CONFIG_USE_DDR2 = y" >> $(obj)include/config.mk
+	@echo "CONFIG_USE_SDRAM = n" >> $(obj)include/config.mk
+	@echo "CONFIG_JZ_RECOVERY = y" >> $(obj)include/config.mk
+	@echo "CONFIG_MBR_UBOOT = y" >> $(obj)include/config.mk
+
+lepus60b_msc_config:	unconfig
+	@echo "#define CONFIG_MSC_U_BOOT" > $(obj)include/config.h
+	@echo "#define CONFIG_SDRAM_DDR2" >> $(obj)include/config.h
+	@echo "Compile MSC boot image for lepus60b"
+	@./mkconfig -a lepus60b mips mips lepus60b
+	@echo "TEXT_BASE = 0x80100200" > $(obj)board/lepus60b/config.tmp
+	@echo "CONFIG_MSC_U_BOOT = y" >> $(obj)include/config.mk
+	@echo "CONFIG_CPU_TYPE = 4760b" >> $(obj)include/config.mk
+	@echo "CONFIG_USE_MDDR = n" >> $(obj)include/config.mk
+	@echo "CONFIG_USE_DDR1 = n" >> $(obj)include/config.mk
+	@echo "CONFIG_USE_DDR2 = y" >> $(obj)include/config.mk
+	@echo "CONFIG_USE_SDRAM = n" >> $(obj)include/config.mk
+
+lepus60b_msc_recovery_config:	unconfig
+	@echo "#define CONFIG_MSC_U_BOOT" > $(obj)include/config.h
+	@echo "#define CONFIG_JZ_RECOVERY">> $(obj)include/config.h
+	@echo "#define CONFIG_SDRAM_DDR2" >> $(obj)include/config.h
+	@echo "Compile MSC boot image for lepus60b"
+	@./mkconfig -a lepus60b mips mips lepus60b
+	@echo "TEXT_BASE = 0x80100200" > $(obj)board/lepus60b/config.tmp
+	@echo "CONFIG_MSC_U_BOOT = y" >> $(obj)include/config.mk
+	@echo "CONFIG_CPU_TYPE = 4760b" >> $(obj)include/config.mk
+	@echo "CONFIG_USE_MDDR = n" >> $(obj)include/config.mk
+	@echo "CONFIG_USE_DDR1 = n" >> $(obj)include/config.mk
+	@echo "CONFIG_USE_DDR2 = y" >> $(obj)include/config.mk
+	@echo "CONFIG_USE_SDRAM = n" >> $(obj)include/config.mk
+	@echo "CONFIG_JZ_RECOVERY = y" >> $(obj)include/config.mk	
+	@echo "CONFIG_MBR_UBOOT = y" >> $(obj)include/config.mk
+
+lepus_nand_ddr1_config: unconfig
+	@echo "#define CONFIG_NAND_U_BOOT" > $(obj)include/config.h
+	@echo "#define CONFIG_SDRAM_DDR1" >> $(obj)include/config.h
+	@echo "Compile NAND boot image for lepus"
+	@./mkconfig -a lepus mips mips lepus
+	@echo "TEXT_BASE = 0x80100000" > $(obj)board/lepus/config.tmp
+	@echo "CONFIG_NAND_U_BOOT = y" >> $(obj)include/config.mk
+	@echo "CONFIG_CPU_TYPE = 4760" >> $(obj)include/config.mk
+	@echo "CONFIG_USE_MDDR = n" >> $(obj)include/config.mk
+	@echo "CONFIG_USE_DDR1 = y" >> $(obj)include/config.mk
+	@echo "CONFIG_USE_DDR2 = n" >> $(obj)include/config.mk
+	@echo "CONFIG_USE_SDRAM = n" >> $(obj)include/config.mk
+
+lepus_nand_mddr_config	:	unconfig
+	@echo "#define CONFIG_NAND_U_BOOT" > $(obj)include/config.h
+	@echo "#define CONFIG_SDRAM_MDDR" >> $(obj)include/config.h
+	@echo "Compile NAND boot image for lepus, using MDDR"
+	@./mkconfig -a lepus mips mips lepus
+	@echo "TEXT_BASE = 0x80100000" > $(obj)board/cygnus/config.tmp
+	@echo "CONFIG_NAND_U_BOOT = y" >> $(obj)include/config.mk
+	@echo "CONFIG_CPU_TYPE = 4760" >> $(obj)include/config.mk
+	@echo "CONFIG_USE_MDDR = y" >> $(obj)include/config.mk
+	@echo "CONFIG_USE_DDR1 = n" >> $(obj)include/config.mk
+	@echo "CONFIG_USE_DDR2 = n" >> $(obj)include/config.mk
+	@echo "CONFIG_USE_SDRAM = n" >> $(obj)include/config.mk
+
+lepus_nand_android_config:	unconfig
+	@echo "#define CONFIG_NAND_U_BOOT" > $(obj)include/config.h
+	@echo "#define CONFIG_SDRAM_DDR2" >> $(obj)include/config.h
+	@echo "#define CONFIG_ANDROID" >> $(obj)include/config.h
+	@echo "Compile NAND boot image for lepus - android"
+	@./mkconfig -a lepus mips mips lepus
+	@echo "TEXT_BASE = 0x80100000" > $(obj)board/lepus/config.tmp
+	@echo "CONFIG_NAND_U_BOOT = y" >> $(obj)include/config.mk
+	@echo "CONFIG_CPU_TYPE = 4760" >> $(obj)include/config.mk
+	@echo "CONFIG_USE_MDDR = n" >> $(obj)include/config.mk
+	@echo "CONFIG_USE_DDR1 = n" >> $(obj)include/config.mk
+	@echo "CONFIG_USE_DDR2 = y" >> $(obj)include/config.mk
+	@echo "CONFIG_USE_SDRAM = n" >> $(obj)include/config.mk
+
+cygnus60b_nand_mddr_config	:	unconfig
+	@echo "#define CONFIG_NAND_U_BOOT" > $(obj)include/config.h
+	@echo "#define CONFIG_SDRAM_MDDR" >> $(obj)include/config.h
+	@echo "Compile NAND boot image for cygnus60b, using MDDR"
+	@./mkconfig -a cygnus60b mips mips cygnus60b
+	@echo "TEXT_BASE = 0x80100000" > $(obj)board/cygnus60b/config.tmp
+	@echo "CONFIG_NAND_U_BOOT = y" >> $(obj)include/config.mk
+	@echo "CONFIG_CPU_TYPE = 4760b" >> $(obj)include/config.mk
+	@echo "CONFIG_USE_MDDR = y" >> $(obj)include/config.mk
+	@echo "CONFIG_USE_DDR1 = n" >> $(obj)include/config.mk
+	@echo "CONFIG_USE_DDR2 = n" >> $(obj)include/config.mk
+	@echo "CONFIG_USE_SDRAM = n" >> $(obj)include/config.mk
+
+cygnus_nand_mddr_config	:	unconfig
+	@echo "#define CONFIG_NAND_U_BOOT" > $(obj)include/config.h
+	@echo "#define CONFIG_SDRAM_MDDR" >> $(obj)include/config.h
+	@echo "Compile NAND boot image for cygnus, using MDDR"
+	@./mkconfig -a cygnus mips mips cygnus
+	@echo "TEXT_BASE = 0x80100000" > $(obj)board/cygnus/config.tmp
+	@echo "CONFIG_NAND_U_BOOT = y" >> $(obj)include/config.mk
+	@echo "CONFIG_CPU_TYPE = 4760" >> $(obj)include/config.mk
+	@echo "CONFIG_USE_MDDR = y" >> $(obj)include/config.mk
+	@echo "CONFIG_USE_DDR1 = n" >> $(obj)include/config.mk
+	@echo "CONFIG_USE_DDR2 = n" >> $(obj)include/config.mk
+	@echo "CONFIG_USE_SDRAM = n" >> $(obj)include/config.mk
+
+cygnus_nand_ddr1_config	:	unconfig
+	@echo "#define CONFIG_NAND_U_BOOT" > $(obj)include/config.h
+	@echo "#define CONFIG_SDRAM_DDR1" >> $(obj)include/config.h
+	@echo "Compile NAND boot image for cygnus, using DDR1"
+	@./mkconfig -a cygnus mips mips cygnus
+	@echo "TEXT_BASE = 0x80100000" > $(obj)board/cygnus/config.tmp
+	@echo "CONFIG_NAND_U_BOOT = y" >> $(obj)include/config.mk
+	@echo "CONFIG_CPU_TYPE = 4760" >> $(obj)include/config.mk
+	@echo "CONFIG_USE_MDDR = n" >> $(obj)include/config.mk
+	@echo "CONFIG_USE_DDR1 = y" >> $(obj)include/config.mk
+	@echo "CONFIG_USE_DDR2 = n" >> $(obj)include/config.mk
+	@echo "CONFIG_USE_SDRAM = n" >> $(obj)include/config.mk
+
+cygnus60b_nand_ddr2_config	:	unconfig
+	@echo "#define CONFIG_NAND_U_BOOT" > $(obj)include/config.h
+	@echo "#define CONFIG_SDRAM_DDR2" >> $(obj)include/config.h
+	@echo "Compile NAND boot image for cygnus60b, using DDR2"
+	@./mkconfig -a cygnus60b mips mips cygnus60b
+	@echo "TEXT_BASE = 0x80100000" > $(obj)board/cygnus60b/config.tmp
+	@echo "CONFIG_NAND_U_BOOT = y" >> $(obj)include/config.mk
+	@echo "CONFIG_CPU_TYPE = 4760b" >> $(obj)include/config.mk
+	@echo "CONFIG_USE_MDDR = n" >> $(obj)include/config.mk
+	@echo "CONFIG_USE_DDR1 = n" >> $(obj)include/config.mk
+	@echo "CONFIG_USE_DDR2 = y" >> $(obj)include/config.mk
+	@echo "CONFIG_USE_SDRAM = n" >> $(obj)include/config.mk
+
+cygnus_nand_ddr2_config	:	unconfig
+	@echo "#define CONFIG_NAND_U_BOOT" > $(obj)include/config.h
+	@echo "#define CONFIG_SDRAM_DDR2" >> $(obj)include/config.h
+	@echo "Compile NAND boot image for cygnus, using DDR2"
+	@./mkconfig -a cygnus mips mips cygnus
+	@echo "TEXT_BASE = 0x80100000" > $(obj)board/cygnus/config.tmp
+	@echo "CONFIG_NAND_U_BOOT = y" >> $(obj)include/config.mk
+	@echo "CONFIG_CPU_TYPE = 4760" >> $(obj)include/config.mk
+	@echo "CONFIG_USE_MDDR = n" >> $(obj)include/config.mk
+	@echo "CONFIG_USE_DDR1 = n" >> $(obj)include/config.mk
+	@echo "CONFIG_USE_DDR2 = y" >> $(obj)include/config.mk
+	@echo "CONFIG_USE_SDRAM = n" >> $(obj)include/config.mk
+
+cygnus_nand_msdram_config	:	unconfig
+	@echo "#define CONFIG_NAND_U_BOOT" > $(obj)include/config.h
+	@echo "#define CONFIG_MOBILE_SDRAM" >> $(obj)include/config.h
+	@echo "Compile NAND boot image for cygnus, using MSDRAM"
+	@./mkconfig -a cygnus mips mips cygnus
+	@echo "TEXT_BASE = 0x80100000" > $(obj)board/cygnus/config.tmp
+	@echo "CONFIG_NAND_U_BOOT = y" >> $(obj)include/config.mk
+	@echo "CONFIG_CPU_TYPE = 4760" >> $(obj)include/config.mk
+	@echo "CONFIG_USE_MDDR = n" >> $(obj)include/config.mk
+	@echo "CONFIG_USE_DDR1 = n" >> $(obj)include/config.mk
+	@echo "CONFIG_USE_DDR2 = n" >> $(obj)include/config.mk
+	@echo "CONFIG_USE_SDRAM = y" >> $(obj)include/config.mk
+
+cygnus_nand_sdram_config	:	unconfig
+	@echo "#define CONFIG_NAND_U_BOOT" > $(obj)include/config.h
+	@echo "Compile NAND boot image for cygnus, using SDRAM"
+	@./mkconfig -a cygnus mips mips cygnus
+	@echo "TEXT_BASE = 0x80100000" > $(obj)board/cygnus/config.tmp
+	@echo "CONFIG_NAND_U_BOOT = y" >> $(obj)include/config.mk
+	@echo "CONFIG_CPU_TYPE = 4760" >> $(obj)include/config.mk
+	@echo "CONFIG_USE_MDDR = n" >> $(obj)include/config.mk
+	@echo "CONFIG_USE_DDR1 = n" >> $(obj)include/config.mk
+	@echo "CONFIG_USE_DDR2 = n" >> $(obj)include/config.mk
+	@echo "CONFIG_USE_SDRAM = y" >> $(obj)include/config.mk
+
+slt_60_nand_config:	unconfig
+	@echo "#define CONFIG_NAND_U_BOOT" > $(obj)include/config.h
+	@echo "#define CONFIG_SDRAM_DDR2" >> $(obj)include/config.h
+	@echo "Compile NAND boot image for slt_60"
+	@./mkconfig -a slt_60 mips mips slt_60
+	@echo "TEXT_BASE = 0x80100000" > $(obj)board/slt_60/config.tmp
+	@echo "CONFIG_NAND_U_BOOT = y" >> $(obj)include/config.mk
+	@echo "CONFIG_CPU_TYPE = 4760" >> $(obj)include/config.mk
+	@echo "CONFIG_USE_MDDR = n" >> $(obj)include/config.mk
+	@echo "CONFIG_USE_DDR1 = n" >> $(obj)include/config.mk
+	@echo "CONFIG_USE_DDR2 = y" >> $(obj)include/config.mk
+	@echo "CONFIG_USE_SDRAM = n" >> $(obj)include/config.mk
+
+slt_70_nand_config:	unconfig
+	@echo "#define CONFIG_NAND_U_BOOT" > $(obj)include/config.h
+	@echo "#define CONFIG_SDRAM_DDR2" >> $(obj)include/config.h
+	@echo "Compile NAND boot image for slt_70"
+	@./mkconfig -a slt_70 mips mips slt_70
+	@echo "TEXT_BASE = 0x80100000" > $(obj)board/slt_70/config.tmp
+	@echo "CONFIG_NAND_U_BOOT = y" >> $(obj)include/config.mk
+	@echo "CONFIG_CPU_TYPE = 4770" >> $(obj)include/config.mk
+	@echo "CONFIG_USE_MDDR = n" >> $(obj)include/config.mk
+	@echo "CONFIG_USE_DDR1 = n" >> $(obj)include/config.mk
+	@echo "CONFIG_USE_DDR2 = y" >> $(obj)include/config.mk
+	@echo "CONFIG_USE_SDRAM = n" >> $(obj)include/config.mk
+
+pisces_nand_config	:	unconfig
+	@echo "#define CONFIG_NAND_U_BOOT" > $(obj)include/config.h
+	@echo "#define CONFIG_SDRAM_DDR2" >> $(obj)include/config.h
+	@echo "Compile NAND boot image for pisces"
+	@./mkconfig -a pisces mips mips pisces
+	@echo "TEXT_BASE = 0x80100000" > $(obj)board/pisces/config.tmp
+	@echo "CONFIG_NAND_U_BOOT = y" >> $(obj)include/config.mk
+	@echo "CONFIG_CPU_TYPE = 4770" >> $(obj)include/config.mk
+	@echo "CONFIG_USE_MDDR = n" >> $(obj)include/config.mk
+	@echo "CONFIG_USE_DDR1 = n" >> $(obj)include/config.mk
+	@echo "CONFIG_USE_DDR2 = y" >> $(obj)include/config.mk
+	@echo "CONFIG_USE_SDRAM = n" >> $(obj)include/config.mk
+
+
+pisces_msc_config	:	unconfig
+	@echo "#define CONFIG_MSC_U_BOOT" > $(obj)include/config.h
+	@echo "#define CONFIG_SDRAM_DDR2" >> $(obj)include/config.h
+	@echo "Compile MSC boot image for pisces"
+	@./mkconfig -a pisces mips mips pisces
+	@echo "TEXT_BASE = 0x80100200" > $(obj)board/pisces/config.tmp
+	@echo "CONFIG_MSC_U_BOOT = y" >> $(obj)include/config.mk
+	@echo "CONFIG_CPU_TYPE = 4770" >> $(obj)include/config.mk
+	@echo "CONFIG_USE_MDDR = n" >> $(obj)include/config.mk
+	@echo "CONFIG_USE_DDR1 = n" >> $(obj)include/config.mk
+	@echo "CONFIG_USE_DDR2 = y" >> $(obj)include/config.mk
+	@echo "CONFIG_USE_SDRAM = n" >> $(obj)include/config.mk
+	@echo "CONFIG_MBR_UBOOT = y" >> $(obj)include/config.mk
+
+f4760_config		: 	unconfig
+	@echo "#define CONFIG_F4760 1" >>include/config.h
+	@echo "#define CONFIG_SDRAM_MDDR" >> $(obj)include/config.h
+	@echo "Compile NOR boot image for f4760"
+	@./mkconfig -a f4760 mips mips f4760
+	@echo "CONFIG_CPU_TYPE = 4760" >> $(obj)include/config.mk
+	@echo "CONFIG_USE_MDDR = y" >> $(obj)include/config.mk
+	@echo "CONFIG_USE_DDR1 = n" >> $(obj)include/config.mk
+	@echo "CONFIG_USE_DDR2 = n" >> $(obj)include/config.mk
+	@echo "CONFIG_USE_SDRAM = n" >> $(obj)include/config.mk
+
+f4760_nand_config	:	unconfig
+	@echo "#define CONFIG_NAND_U_BOOT" > $(obj)include/config.h
+	@echo "#define CONFIG_MOBILE_SDRAM" >> $(obj)include/config.h
+	@echo "Compile NAND boot image for f4760"
+	@./mkconfig -a f4760 mips mips f4760
+	@echo "TEXT_BASE = 0x80100000" > $(obj)board/f4760/config.tmp
+	@echo "CONFIG_NAND_U_BOOT = y" >> $(obj)include/config.mk
+	@echo "CONFIG_CPU_TYPE = 4760" >> $(obj)include/config.mk
+	@echo "CONFIG_USE_MDDR = n" >> $(obj)include/config.mk
+	@echo "CONFIG_USE_DDR1 = n" >> $(obj)include/config.mk
+	@echo "CONFIG_USE_DDR2 = n" >> $(obj)include/config.mk
+	@echo "CONFIG_USE_SDRAM = y" >> $(obj)include/config.mk
+
+f4760_spi_config	:	unconfig
+	@echo "#define CONFIG_SPI_U_BOOT" > $(obj)include/config.h
+	@echo "Compile SPI boot image for f4760"
+	@./mkconfig -a f4760 mips mips f4760
+	@echo "TEXT_BASE = 0x80100000" > $(obj)board/f4760/config.tmp
+	@echo "CONFIG_SPI_U_BOOT = y" >> $(obj)include/config.mk
+	@echo "CONFIG_CPU_TYPE = 4760" >> $(obj)include/config.mk
+
+fuwa_config		: 	unconfig
+	@ >include/config.h
+	@echo "#define CONFIG_FUWA 1" >>include/config.h
+	@./mkconfig -a fuwa mips mips fuwa
+fuwa_nand_config	:	unconfig
+	@echo "#define CONFIG_NAND_U_BOOT" > $(obj)include/config.h
+	@echo "Compile NAND boot image for fuwa"
+	@./mkconfig -a fuwa mips mips fuwa
+	@echo "TEXT_BASE = 0x80100000" > $(obj)board/fuwa/config.tmp
+	@echo "CONFIG_NAND_U_BOOT = y" >> $(obj)include/config.mk
+
+fuwa1_config		: 	unconfig
+	@ >include/config.h
+	@echo "#define CONFIG_FUWA1 1" >>include/config.h
+	@./mkconfig -a fuwa1 mips mips fuwa1
+
+f4750l_config		: 	unconfig
+	@ >include/config.h
+	@echo "#define CONFIG_F4750L 1" >>include/config.h
+	@./mkconfig -a f4750l mips mips f4750l
+
+f4750l_nand_config	:	unconfig
+	@echo "#define CONFIG_NAND_U_BOOT" > $(obj)include/config.h
+	@echo "Compile NAND boot image for f4750l"
+	@./mkconfig -a f4750l mips mips f4750l
+	@echo "TEXT_BASE = 0x80100000" > $(obj)board/f4750l/config.tmp
+	@echo "CONFIG_NAND_U_BOOT = y" >> $(obj)include/config.mk
+
+volans_config		: 	unconfig
+	@ >include/config.h
+	@echo "#define CONFIG_VOLANS 1" >>include/config.h
+	@./mkconfig -a volans mips mips volans
+
+volans_nand_config	:	unconfig
+	@echo "#define CONFIG_NAND_U_BOOT" > $(obj)include/config.h
+	@echo "Compile NAND boot image for volans"
+	@./mkconfig -a volans mips mips volans
+	@echo "TEXT_BASE = 0x80100000" > $(obj)board/volans/config.tmp
+	@echo "CONFIG_NAND_U_BOOT = y" >> $(obj)include/config.mk
+
+aquila_nand_config	:	unconfig
+	@echo "#define CONFIG_NAND_U_BOOT" > $(obj)include/config.h
+	@echo "Compile NAND boot image for aquila"
+	@./mkconfig -a aquila mips mips aquila
+	@echo "TEXT_BASE = 0x80100000" > $(obj)board/aquila/config.tmp
+	@echo "CONFIG_NAND_U_BOOT = y" >> $(obj)include/config.mk
+
+altair_nand_config	:	unconfig
+	@echo "#define CONFIG_NAND_U_BOOT" > $(obj)include/config.h
+	@echo "#define CONFIG_SDRAM_MDDR" >> $(obj)include/config.h
+	@echo "Compile NAND boot image for altair, using MDDR"
+	@./mkconfig -a altair mips mips altair
+	@echo "TEXT_BASE = 0x80100000" > $(obj)board/altair/config.tmp
+	@echo "CONFIG_NAND_U_BOOT = y" >> $(obj)include/config.mk
+	@echo "CONFIG_CPU_TYPE = 4760" >> $(obj)include/config.mk
+	@echo "CONFIG_USE_MDDR = y" >> $(obj)include/config.mk
+	@echo "CONFIG_USE_DDR1 = n" >> $(obj)include/config.mk
+	@echo "CONFIG_USE_DDR2 = n" >> $(obj)include/config.mk
+	@echo "CONFIG_USE_SDRAM = n" >> $(obj)include/config.mk
+
+altair_4760b_nand_config	:	unconfig
+	@echo "#define CONFIG_NAND_U_BOOT" > $(obj)include/config.h
+	@echo "#define CONFIG_SDRAM_MDDR" >> $(obj)include/config.h
+	@echo "Compile NAND boot image for altair_4760b, using MDDR"
+	@./mkconfig -a altair_4760b mips mips altair_4760b
+	@echo "TEXT_BASE = 0x80100000" > $(obj)board/altair_4760b/config.tmp
+	@echo "CONFIG_NAND_U_BOOT = y" >> $(obj)include/config.mk
+	@echo "CONFIG_CPU_TYPE = 4760b" >> $(obj)include/config.mk
+	@echo "CONFIG_USE_MDDR = y" >> $(obj)include/config.mk
+	@echo "CONFIG_USE_DDR1 = n" >> $(obj)include/config.mk
+	@echo "CONFIG_USE_DDR2 = n" >> $(obj)include/config.mk
+	@echo "CONFIG_USE_SDRAM = n" >> $(obj)include/config.mk
+
+z800_nand_config	:	unconfig
+	@echo "#define CONFIG_NAND_U_BOOT" > $(obj)include/config.h
+	@echo "#define CONFIG_SDRAM_MDDR" >> $(obj)include/config.h
+	@echo "Compile NAND boot image for Z800, using MDDR"
+	@./mkconfig -a z800 mips mips z800
+	@echo "TEXT_BASE = 0x80100000" > $(obj)board/z800/config.tmp
+	@echo "CONFIG_NAND_U_BOOT = y" >> $(obj)include/config.mk
+	@echo "CONFIG_CPU_TYPE = 4760" >> $(obj)include/config.mk
+	@echo "CONFIG_USE_MDDR = y" >> $(obj)include/config.mk
+	@echo "CONFIG_USE_DDR1 = n" >> $(obj)include/config.mk
+	@echo "CONFIG_USE_DDR2 = n" >> $(obj)include/config.mk
+	@echo "CONFIG_USE_SDRAM = n" >> $(obj)include/config.mk
+
+pt701_nand_config	:	unconfig
+	@echo "#define CONFIG_NAND_U_BOOT" > $(obj)include/config.h
+	@echo "#define CONFIG_SDRAM_MDDR" >> $(obj)include/config.h
+	@echo "Compile NAND boot image for PT701, using MDDR"
+	@./mkconfig -a pt701 mips mips pt701
+	@echo "TEXT_BASE = 0x80100000" > $(obj)board/pt701/config.tmp
+	@echo "CONFIG_NAND_U_BOOT = y" >> $(obj)include/config.mk
+	@echo "CONFIG_CPU_TYPE = 4760" >> $(obj)include/config.mk
+	@echo "CONFIG_USE_MDDR = y" >> $(obj)include/config.mk
+	@echo "CONFIG_USE_DDR1 = n" >> $(obj)include/config.mk
+	@echo "CONFIG_USE_DDR2 = n" >> $(obj)include/config.mk
+	@echo "CONFIG_USE_SDRAM = n" >> $(obj)include/config.mk
+
+pt701_8_nand_config	:	unconfig
+	@echo "#define CONFIG_NAND_U_BOOT" > $(obj)include/config.h
+	@echo "#define CONFIG_SDRAM_MDDR" >> $(obj)include/config.h
+	@echo "Compile NAND boot image for PT701 VM-tablet-8"
+	@./mkconfig -a pt701_8 mips mips pt701_8
+	@echo "TEXT_BASE = 0x80100000" > $(obj)board/pt701_8/config.tmp
+	@echo "CONFIG_NAND_U_BOOT = y" >> $(obj)include/config.mk
+	@echo "CONFIG_CPU_TYPE = 4760" >> $(obj)include/config.mk
+	@echo "CONFIG_USE_MDDR = y" >> $(obj)include/config.mk
+	@echo "CONFIG_USE_DDR1 = n" >> $(obj)include/config.mk
+	@echo "CONFIG_USE_DDR2 = n" >> $(obj)include/config.mk
+	@echo "CONFIG_USE_SDRAM = n" >> $(obj)include/config.mk
+
+pt702_nand_config:	unconfig
+	@echo "#define CONFIG_NAND_U_BOOT" > $(obj)include/config.h
+	@echo "#define CONFIG_SDRAM_DDR2" >> $(obj)include/config.h
+	@echo "Compile NAND boot image for pt702"
+	@./mkconfig -a pt702 mips mips pt702
+	@echo "TEXT_BASE = 0x80100000" > $(obj)board/pt702/config.tmp
+	@echo "CONFIG_NAND_U_BOOT = y" >> $(obj)include/config.mk
+	@echo "CONFIG_CPU_TYPE = 4760" >> $(obj)include/config.mk
+	@echo "CONFIG_USE_MDDR = n" >> $(obj)include/config.mk
+	@echo "CONFIG_USE_DDR1 = n" >> $(obj)include/config.mk
+	@echo "CONFIG_USE_DDR2 = y" >> $(obj)include/config.mk
+	@echo "CONFIG_USE_SDRAM = n" >> $(obj)include/config.mk
+
+crux_nand_config	:	unconfig
+	@echo "#define CONFIG_NAND_U_BOOT" > $(obj)include/config.h
+	@echo "#define CONFIG_SDRAM_MDDR" >> $(obj)include/config.h
+	@echo "Compile NAND boot image for crux, using MDDR"
+	@./mkconfig -a crux mips mips crux
+	@echo "TEXT_BASE = 0x80100000" > $(obj)board/crux/config.tmp
+	@echo "CONFIG_NAND_U_BOOT = y" >> $(obj)include/config.mk
+	@echo "CONFIG_CPU_TYPE = 4760" >> $(obj)include/config.mk
+	@echo "CONFIG_USE_MDDR = y" >> $(obj)include/config.mk
+	@echo "CONFIG_USE_DDR1 = n" >> $(obj)include/config.mk
+	@echo "CONFIG_USE_DDR2 = n" >> $(obj)include/config.mk
+	@echo "CONFIG_USE_SDRAM = n" >> $(obj)include/config.mk
+
+
+cetus_nand_config	:	unconfig
+	@echo "#define CONFIG_NAND_U_BOOT" > $(obj)include/config.h
+	@echo "Compile NAND boot image for cetus"
+	@./mkconfig -a cetus mips mips cetus
+	@echo "TEXT_BASE = 0x80100000" > $(obj)board/cetus/config.tmp
+	@echo "CONFIG_NAND_U_BOOT = y" >> $(obj)include/config.mk
+
+cetus_msc_config		:	unconfig
+	@echo "#define CONFIG_NAND_U_BOOT" > $(obj)include/config.h
+	@echo "#define CONFIG_MSC_U_BOOT"  > $(obj)include/config.h
+	@echo "Compile MSC boot image for cetus"
+	@./mkconfig -a cetus mips mips cetus
+	@echo "TEXT_BASE = 0x80100000" > $(obj)board/cetus/config.tmp
+	@echo "CONFIG_NAND_U_BOOT = y" >> $(obj)include/config.mk
+	@echo "CONFIG_MSC_U_BOOT = y"  >> $(obj)include/config.mk
+
+cetus_msc_recovery_config		:	unconfig
+	@echo "#define CONFIG_NAND_U_BOOT" > $(obj)include/config.h
+	@echo "#define CONFIG_MSC_U_BOOT"  > $(obj)include/config.h
+	@echo "#define CONFIG_JZ_RECOVERY" >> $(obj)include/config.h
+	@echo "Compile MSC boot image for cetus"
+	@./mkconfig -a cetus mips mips cetus
+	@echo "TEXT_BASE = 0x80100200" > $(obj)board/cetus/config.tmp
+	@echo "CONFIG_NAND_U_BOOT = y" >> $(obj)include/config.mk
+	@echo "CONFIG_MSC_U_BOOT = y"  >> $(obj)include/config.mk
+	@echo "CONFIG_JZ_RECOVERY = y" >> $(obj)include/config.mk
+	@echo "CONFIG_MBR_UBOOT = y" >> $(obj)include/config.mk
+
+apus_config		: 	unconfig
+	@ >include/config.h
+	@echo "#define CONFIG_APUS 1" >>include/config.h
+	@./mkconfig -a apus mips mips apus
+
+apus_nand_config	:	unconfig
+	@echo "#define CONFIG_NAND_U_BOOT" > $(obj)include/config.h
+	@echo "Compile NAND boot image for apus"
+	@./mkconfig -a apus mips mips apus
+	@echo "TEXT_BASE = 0x80100000" > $(obj)board/apus/config.tmp
+	@echo "CONFIG_NAND_U_BOOT = y" >> $(obj)include/config.mk
+
+apus_msc_config		:	unconfig
+	@echo "#define CONFIG_NAND_U_BOOT" > $(obj)include/config.h
+	@echo "#define CONFIG_MSC_U_BOOT"  > $(obj)include/config.h
+	@echo "Compile MSC boot image for apus"
+	@./mkconfig -a apus mips mips apus
+	@echo "TEXT_BASE = 0x80100000" > $(obj)board/apus/config.tmp
+	@echo "CONFIG_NAND_U_BOOT = y" >> $(obj)include/config.mk
+	@echo "CONFIG_MSC_U_BOOT = y"  >> $(obj)include/config.mk
+
+apus_spi_config	:	unconfig
+	@echo "#define CONFIG_SPI_U_BOOT" > $(obj)include/config.h
+	@echo "Compile SPI boot image for apus"
+	@./mkconfig -a apus mips mips apus
+	@echo "TEXT_BASE = 0x80100000" > $(obj)board/apus/config.tmp
+	@echo "CONFIG_SPI_U_BOOT = y" >> $(obj)include/config.mk
+
+lib4750_config		: 	unconfig
+	@ >include/config.h
+	@echo "#define CONFIG_LIB4750 1" >>include/config.h
+	@./mkconfig -a lib4750 mips mips lib4750
+
+slt_50_nand_config	:	unconfig
+	@echo "#define CONFIG_NAND_U_BOOT" > $(obj)include/config.h
+	@echo "Compile NAND boot image for slt_50"
+	@./mkconfig -a slt_50 mips mips slt_50
+	@echo "TEXT_BASE = 0x80100000" > $(obj)board/slt_50/config.tmp
+	@echo "CONFIG_NAND_U_BOOT = y" >> $(obj)include/config.mk
+
+slt_55_nand_config	:	unconfig
+	@echo "#define CONFIG_NAND_U_BOOT" > $(obj)include/config.h
+	@echo "Compile NAND boot image for slt_55"
+	@./mkconfig -a slt_55 mips mips slt_55
+	@echo "TEXT_BASE = 0x80100000" > $(obj)board/slt_55/config.tmp
+	@echo "CONFIG_NAND_U_BOOT = y" >> $(obj)include/config.mk
+
+emurus_config		: 	unconfig
+	@ >include/config.h
+	@echo "#define CONFIG_EMURUS 1" >>include/config.h
+	@./mkconfig -a emurus mips mips emurus
+
+virgo_config		: 	unconfig
+	@ >include/config.h
+	@echo "#define CONFIG_VIRGO 1" >>include/config.h
+	@./mkconfig -a virgo mips mips virgo
+
+virgo_nand_config	:	unconfig
+	@echo "#define CONFIG_NAND_U_BOOT" > $(obj)include/config.h
+	@echo "Compile NAND boot image for virgo"
+	@./mkconfig -a virgo mips mips virgo
+	@echo "TEXT_BASE = 0x80100000" > $(obj)board/virgo/config.tmp
+	@echo "CONFIG_NAND_U_BOOT = y" >> $(obj)include/config.mk
+
+leo_config		: 	unconfig
+	@ >include/config.h
+	@echo "#define CONFIG_LEO 1" >>include/config.h
+	@./mkconfig -a leo mips mips leo
+
+leo_nand_config	:	unconfig
+	@echo "#define CONFIG_NAND_U_BOOT" > $(obj)include/config.h
+	@echo "Compile NAND boot image for leo"
+	@./mkconfig -a leo mips mips leo
+	@echo "TEXT_BASE = 0x80100000" > $(obj)board/leo/config.tmp
+	@echo "CONFIG_NAND_U_BOOT = y" >> $(obj)include/config.mk
+
+pavo_config		: 	unconfig
+	@ >include/config.h
+	@echo "#define CONFIG_PAVO 1" >>include/config.h
+	@./mkconfig -a pavo mips mips pavo
+
+pavo_nand_config	:	unconfig
+	@echo "#define CONFIG_NAND_U_BOOT" > $(obj)include/config.h
+	@echo "Compile NAND boot image for pavo"
+	@./mkconfig -a pavo mips mips pavo
+	@echo "TEXT_BASE = 0x80100000" > $(obj)board/pavo/config.tmp
+	@echo "CONFIG_NAND_U_BOOT = y" >> $(obj)include/config.mk
+
+dipper_config		: 	unconfig
+	@ >include/config.h
+	@echo "#define CONFIG_DIPPER 1" >>include/config.h
+	@./mkconfig -a dipper mips mips dipper
+
+dipper_nand_config	:	unconfig
+	@echo "#define CONFIG_NAND_U_BOOT" > $(obj)include/config.h
+	@echo "Compile NAND boot image for dipper"
+	@./mkconfig -a dipper mips mips dipper
+	@echo "TEXT_BASE = 0x80100000" > $(obj)board/dipper/config.tmp
+	@echo "CONFIG_NAND_U_BOOT = y" >> $(obj)include/config.mk
+
+uranus_config		: 	unconfig
+	@ >include/config.h
+	@echo "#define CONFIG_URANUS 1" >>include/config.h
+	@./mkconfig -a uranus mips mips uranus
+
+libra_config		: 	unconfig
+	@ >include/config.h
+	@echo "#define CONFIG_LIBRA 1" >>include/config.h
+	@./mkconfig -a libra mips mips libra
+
+fcr_config		: 	unconfig
+	@ >include/config.h
+	@echo "#define CONFIG_FCR 1" >>include/config.h
+	@./mkconfig -a fcr mips mips fcr
+
+fprint_config		: 	unconfig
+	@ >include/config.h
+	@echo "#define CONFIG_FPRINT 1" >>include/config.h
+	@./mkconfig -a fprint mips mips fprint
+
+jdi_config		: 	unconfig
+	@ >include/config.h
+	@echo "#define CONFIG_JDI 1" >>include/config.h
+	@./mkconfig -a jdi mips mips jdi
+
+pmpv1_config		: 	unconfig
+	@ >include/config.h
+	@echo "#define CONFIG_PMPV1 1" >>include/config.h
+	@./mkconfig -a pmpv1 mips mips pmpv1
+
+pmpv1_nand_config	:	unconfig
+	@echo "#define CONFIG_NAND_U_BOOT" > $(obj)include/config.h
+	@echo "Compile NAND boot image for pmpv1"
+	@./mkconfig -a pmpv1 mips mips pmpv1
+	@echo "TEXT_BASE = 0x80100000" > $(obj)board/pmpv1/config.tmp
+	@echo "CONFIG_NAND_U_BOOT = y" >> $(obj)include/config.mk
+
+pmpv2_config		: 	unconfig
+	@ >include/config.h
+	@echo "#define CONFIG_PMPV2 1" >>include/config.h
+	@./mkconfig -a pmpv2 mips mips pmpv2
+
+pmpv2_nand_config	:	unconfig
+	@echo "#define CONFIG_NAND_U_BOOT" > $(obj)include/config.h
+	@echo "Compile NAND boot image for pmpv2"
+	@./mkconfig -a pmpv2 mips mips pmpv2
+	@echo "TEXT_BASE = 0x80100000" > $(obj)board/pmpv2/config.tmp
+	@echo "CONFIG_NAND_U_BOOT = y" >> $(obj)include/config.mk
+
+slt_nand_config	:	unconfig
+	@echo "#define CONFIG_NAND_U_BOOT" > $(obj)include/config.h
+	@echo "Compile NAND boot image for slt board(Jz4730 chip-sorting board)"
+	@./mkconfig -a slt mips mips slt
+	@echo "TEXT_BASE = 0x80100000" > $(obj)board/slt/config.tmp
+	@echo "CONFIG_NAND_U_BOOT = y" >> $(obj)include/config.mk
+
+taurus_config		: 	unconfig
+	@ >include/config.h
+	@echo "#define CONFIG_TAURUS 1" >>include/config.h
+	@./mkconfig -a taurus mips mips taurus
+
+iptv_config		: 	unconfig
+	@ >include/config.h
+	@echo "#define CONFIG_IPTV 1" >>include/config.h
+	@./mkconfig -a iptv mips mips iptv
+
+iptv_nand_config	:	unconfig
+	@echo "#define CONFIG_NAND_U_BOOT" > $(obj)include/config.h
+	@echo "Compile NAND boot image for iptv"
+	@./mkconfig -a iptv mips mips iptv
+	@echo "TEXT_BASE = 0x80100000" > $(obj)board/iptv/config.tmp
+	@echo "CONFIG_NAND_U_BOOT = y" >> $(obj)include/config.mk
+
+gps_config		: 	unconfig
+	@ >include/config.h
+	@echo "#define CONFIG_GPS 1" >>include/config.h
+	@./mkconfig -a gps mips mips gps
+
+kaifa_config		: 	unconfig
+	@ >include/config.h
+	@echo "#define CONFIG_KAIFA 1" >>include/config.h
+	@./mkconfig -a kaifa mips mips kaifa
 
 #########################################################################
 ## MIPS32 AU1X00
@@ -2279,6 +3140,13 @@ clean:
 	rm -f $(obj)board/integratorap/u-boot.lds $(obj)board/integratorcp/u-boot.lds
 	rm -f $(obj)include/bmp_logo.h
 	rm -f $(obj)nand_spl/u-boot-spl $(obj)nand_spl/u-boot-spl.map
+	rm -f $(obj)msc_spl/u-boot-spl $(obj)msc_spl/u-boot-spl.map
+	rm -f $(obj)spi_spl/u-boot-spl $(obj)spi_spl/u-boot-spl.map
+	if [ ! "$(BOARDDIR)" = "" ]; then \
+	        rm -rf $(TOPDIR)/nand_spl/board/$(BOARDDIR)/*.c $(TOPDIR)/nand_spl/board/$(BOARDDIR)/*.S; \
+	        rm -rf $(TOPDIR)/nand_spl/board/$(BOARDDIR)/.depend; \
+	fi
+	@rm -rf fw.bin
 
 clobber:	clean
 	find $(OBJTREE) -type f \( -name .depend \
@@ -2291,7 +3159,7 @@ clobber:	clean
 	rm -f $(obj)tools/crc32.c $(obj)tools/environment.c $(obj)tools/env/crc32.c
 	rm -f $(obj)tools/inca-swap-bytes $(obj)cpu/mpc824x/bedbug_603e.c
 	rm -f $(obj)include/asm/proc $(obj)include/asm/arch $(obj)include/asm
-	[ ! -d $(OBJTREE)/nand_spl ] || find $(obj)nand_spl -lname "*" -print | xargs rm -f
+#	[ ! -d $(OBJTREE)/nand_spl ] || find $(obj)nand_spl -lname "*" -print | xargs rm -f
 
 ifeq ($(OBJTREE),$(SRCTREE))
 mrproper \

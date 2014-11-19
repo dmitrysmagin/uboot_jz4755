@@ -25,7 +25,20 @@ include $(TOPDIR)/config.mk
 
 LIB 	:= $(obj)libnand.a
 
-COBJS 	:= nand.o nand_base.o nand_ids.o nand_ecc.o nand_bbt.o nand_util.o
+COBJS 	:= nand.o nand_ids.o nand_ecc.o nand_bbt.o nand_util.o
+
+ifeq ($(BOARD),pisces)
+COBJS += nand_base_jz4770.o
+else
+ifeq ($(BOARD),f4770)
+COBJS += nand_base_jz4770.o
+endif
+ifeq ($(BOARD),lepus60b)
+COBJS += nand_base_jz4760b.o
+else
+COBJS += nand_base.o
+endif
+endif
 
 SRCS 	:= $(COBJS:.o=.c)
 OBJS 	:= $(addprefix $(obj),$(COBJS))

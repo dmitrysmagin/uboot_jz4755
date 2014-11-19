@@ -60,12 +60,14 @@ int nand_legacy_rw (struct nand_chip* nand, int cmd,
 /* info for NAND chips, defined in drivers/nand/nand.c */
 extern nand_info_t nand_info[];
 
+#ifdef CFG_JZ_LINUX_RECOVERY
+extern unsigned int is_jz_linux_recovery;
+#endif
 /* references to names in env_common.c */
 extern uchar default_environment[];
 extern int default_environment_size;
 
 char * env_name_spec = "NAND";
-
 
 #ifdef ENV_IS_EMBEDDED
 extern uchar environment[];
@@ -74,6 +76,7 @@ env_t *env_ptr = (env_t *)(&environment[0]);
 env_t *env_ptr = 0;
 #endif /* ENV_IS_EMBEDDED */
 
+#undef ENV_IS_EMBEDDED
 
 /* local functions */
 #if !defined(ENV_IS_EMBEDDED)
@@ -142,7 +145,6 @@ int env_init(void)
 	gd->env_addr  = (ulong)&default_environment[0];
 	gd->env_valid = 1;
 #endif /* ENV_IS_EMBEDDED */
-
 	return (0);
 }
 
@@ -156,14 +158,47 @@ int saveenv(void)
 {
 	ulong total;
 	int ret = 0;
+	
+#ifdef CFG_JZ_LINUX_RECOVERY	
+	ulong env_offset,env_redund_offset;
 
+	env_ptr->flags++;
+	total = CFG_ENV_SIZE;
+	
+	if(is_jz_linux_recovery){
+		env_offset=CFG_ENV_REVY_OFFSET;
+		env_redund_offset=CFG_ENV_REVY_OFFSET_REDUND;
+	}else{
+		env_offset=CFG_ENV_OFFSET;
+		env_redund_offset=CFG_ENV_OFFSET_REDUND;
+	}
+
+	if(gd->env_valid == 1) {
+		puts ("Erasing redundant Nand... ");
+		if (nand_erase(&nand_info[0],
+			       env_redund_offset, CFG_NAND_BLOCK_SIZE))
+			return 1;
+		puts ("Writing to redundant Nand... ");
+		ret = nand_write(&nand_info[0], env_redund_offset, &total,
+				 (u_char*) env_ptr);
+	} else {
+		puts ("Erasing Nand...");
+		if (nand_erase(&nand_info[0],
+			       env_offset, CFG_NAND_BLOCK_SIZE))
+			return 1;
+
+		puts ("Writing to Nand... ");
+		ret = nand_write(&nand_info[0], env_offset, &total,
+				 (u_char*) env_ptr);
+	}
+#else
 	env_ptr->flags++;
 	total = CFG_ENV_SIZE;
 
 	if(gd->env_valid == 1) {
 		puts ("Erasing redundant Nand...");
 		if (nand_erase(&nand_info[0],
-			       CFG_ENV_OFFSET_REDUND, CFG_ENV_SIZE))
+			       CFG_ENV_OFFSET_REDUND, CFG_NAND_BLOCK_SIZE))
 			return 1;
 		puts ("Writing to redundant Nand... ");
 		ret = nand_write(&nand_info[0], CFG_ENV_OFFSET_REDUND, &total,
@@ -171,17 +206,19 @@ int saveenv(void)
 	} else {
 		puts ("Erasing Nand...");
 		if (nand_erase(&nand_info[0],
-			       CFG_ENV_OFFSET, CFG_ENV_SIZE))
+			       CFG_ENV_OFFSET, CFG_NAND_BLOCK_SIZE))
 			return 1;
 
 		puts ("Writing to Nand... ");
 		ret = nand_write(&nand_info[0], CFG_ENV_OFFSET, &total,
 				 (u_char*) env_ptr);
 	}
+#endif
+
+	puts ("done\n");
 	if (ret || total != CFG_ENV_SIZE)
 		return 1;
 
-	puts ("done\n");
 	gd->env_valid = (gd->env_valid == 2 ? 1 : 2);
 	return ret;
 }
@@ -190,18 +227,41 @@ int saveenv(void)
 {
 	ulong total;
 	int ret = 0;
+#ifdef CFG_JZ_LINUX_RECOVERY	
+	ulong env_offset,env_redund_offset;
 
+	env_ptr->flags++;
+	total = CFG_ENV_SIZE;
+	
+	if(is_jz_linux_recovery){
+		env_offset=CFG_ENV_REVY_OFFSET;
+	}else{
+		env_offset=CFG_ENV_OFFSET;
+	}
+	
 	puts ("Erasing Nand...");
-	if (nand_erase(&nand_info[0], CFG_ENV_OFFSET, CFG_ENV_SIZE))
+	   /*the third parameter should be aligned with block size,changed by Cynthia*/
+	if (nand_erase(&nand_info[0], env_offset, CFG_NAND_BLOCK_SIZE)) 
+		return 1;
+
+	puts ("Writing to Nand... ");
+	total = CFG_ENV_SIZE;
+	ret = nand_write(&nand_info[0], env_offset, &total, (u_char*)env_ptr);
+#else
+	puts ("Erasing Nand...");
+//	if (nand_erase(&nand_info[0], CFG_ENV_OFFSET, CFG_ENV_SIZE)) 
+       /*the third parameter should be aligned with block size,changed by Cynthia*/
+	if (nand_erase(&nand_info[0], CFG_ENV_OFFSET, CFG_NAND_BLOCK_SIZE)) 
 		return 1;
 
 	puts ("Writing to Nand... ");
 	total = CFG_ENV_SIZE;
 	ret = nand_write(&nand_info[0], CFG_ENV_OFFSET, &total, (u_char*)env_ptr);
+#endif
+	puts ("done\n");
 	if (ret || total != CFG_ENV_SIZE)
 		return 1;
 
-	puts ("done\n");
 	return ret;
 }
 #endif /* CFG_ENV_OFFSET_REDUND */
@@ -224,6 +284,18 @@ void env_relocate_spec (void)
 		  (u_char*) tmp_env1);
 	nand_read(&nand_info[0], CFG_ENV_OFFSET_REDUND, &total,
 		  (u_char*) tmp_env2);
+
+#ifdef CFG_JZ_LINUX_RECOVERY
+	/* if recovery then overwrite 'tmp_env1' and 'tmp_env2' */
+	if(is_jz_linux_recovery){
+		memset(tmp_env1,0,total);
+		memset(tmp_env2,0,total);
+		nand_read(&nand_info[0], CFG_ENV_REVY_OFFSET, &total,
+		  (u_char*) tmp_env1);
+		nand_read(&nand_info[0], CFG_ENV_REVY_OFFSET_REDUND, &total,
+		  (u_char*) tmp_env2);
+	}
+#endif
 
 	crc1_ok = (crc32(0, tmp_env1->data, ENV_SIZE) == tmp_env1->crc);
 	crc2_ok = (crc32(0, tmp_env2->data, ENV_SIZE) == tmp_env2->crc);
@@ -249,13 +321,10 @@ void env_relocate_spec (void)
 
 	}
 
-	free(env_ptr);
 	if(gd->env_valid == 1) {
 		env_ptr = tmp_env1;
-		free(tmp_env2);
 	} else {
 		env_ptr = tmp_env2;
-		free(tmp_env1);
 	}
 
 #endif /* ! ENV_IS_EMBEDDED */
@@ -273,6 +342,14 @@ void env_relocate_spec (void)
 
 	total = CFG_ENV_SIZE;
 	ret = nand_read(&nand_info[0], CFG_ENV_OFFSET, &total, (u_char*)env_ptr);
+
+#ifdef CFG_JZ_LINUX_RECOVERY
+	if(is_jz_linux_recovery){
+		memset(env_ptr,0,total);
+		nand_read(&nand_info[0], CFG_ENV_REVY_OFFSET, &total,(u_char*) env_ptr);
+	}
+#endif
+
   	if (ret || total != CFG_ENV_SIZE)
 		return use_default();
 

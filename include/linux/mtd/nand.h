@@ -5,7 +5,7 @@
  *		       Steven J. Hill <sjhill@realitydiluted.com>
  *		       Thomas Gleixner <tglx@linutronix.de>
  *
- * $Id: nand.h,v 1.68 2004/11/12 10:40:37 gleixner Exp $
+ * $Id: nand.h,v 1.2 2008-07-09 04:50:27 lhhuang Exp $
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License version 2 as
@@ -69,7 +69,9 @@ extern int nand_read_raw (struct mtd_info *mtd, uint8_t *buf, loff_t from, size_
  * is supported now. If you add a chip with bigger oobsize/page
  * adjust this accordingly.
  */
-#define NAND_MAX_OOBSIZE	64
+#define NAND_MAX_OOBSIZE	512	
+#define NAND_MAX_FREESIZE	512
+#define NAND_MAX_ECC		2048 	// MUST larger than oobsize + freesize
 
 /*
  * Constants for hardware specific CLE/ALE/NCE function
@@ -135,6 +137,15 @@ extern int nand_read_raw (struct mtd_info *mtd, uint8_t *buf, loff_t from, size_
 #define NAND_ECC_HW8_512	6
 /* Hardware ECC 12 byte ECC per 2048 Byte data */
 #define NAND_ECC_HW12_2048	7
+/* Hardware ECC 9 byte ECC per 512 Byte data */
+#define NAND_ECC_HW9_512	8
+/* Hardware ECC 7 byte ECC per 512 Byte data(4-bit BCH) */
+#define NAND_ECC_HW7_512	9
+/* Hardware ECC 13 byte ECC per 512 Byte data(8-bit BCH) */
+#define NAND_ECC_HW13_512	10
+/* Hardware ECC 13 byte ECC per 512 Byte data(24-bit BCH) */
+#define NAND_ECC_HW39_512	11
+
 
 /*
  * Constants for Hardware ECC
@@ -165,6 +176,16 @@ extern int nand_read_raw (struct mtd_info *mtd, uint8_t *buf, loff_t from, size_
 /* Chip has a array of 4 pages which can be read without
  * additional ready /busy waits */
 #define NAND_4PAGE_ARRAY	0x00000040
+/* Chip requires that BBT is periodically rewritten to prevent
+ * bits from adjacent blocks from 'leaking' in altering data.
+ * This happens with the Renesas AG-AND chips, possibly others.  */
+#define BBT_AUTO_REFRESH	0x00000080
+/* Chip does not require ready check on read. True
+ * for all large page devices, as they do not support
+ * autoincrement.*/
+#define NAND_NO_READRDY		0x00000100
+/* Chip does not allow subpage writes */
+#define NAND_NO_SUBPAGE_WRITE	0x00000200
 
 /* Options valid for Samsung large page devices */
 #define NAND_SAMSUNG_LP_OPTIONS \
@@ -208,6 +229,12 @@ typedef enum {
 	FL_SYNCING,
 	FL_CACHEDPRG,
 } nand_state_t;
+
+/* Buffer which will be corrected by BCH of jz4750 */
+struct buf_be_corrected {
+	unsigned char *data;
+	unsigned char *oob;
+};
 
 /* Keep gcc happy */
 struct nand_chip;
@@ -348,6 +375,9 @@ struct nand_chip {
 #define NAND_MFR_NATIONAL	0x8f
 #define NAND_MFR_RENESAS	0x07
 #define NAND_MFR_STMICRO	0x20
+#define NAND_MFR_HYNIX     	0xad
+#define NAND_MFR_MICRON		0x2c
+#define NAND_MFR_AMD		0x01
 
 /**
  * struct nand_flash_dev - NAND Flash Device ID Structure
@@ -362,12 +392,38 @@ struct nand_chip {
  * @chipsize:	Total chipsize in Mega Bytes
  * @options:	Bitfield to store chip relevant options
  */
+#if 0
 struct nand_flash_dev {
 	char *name;
 	int id;
 	unsigned long pagesize;
 	unsigned long chipsize;
 	unsigned long erasesize;
+	unsigned long options;
+};
+#endif
+struct nand_flash_dev {
+	char *name;
+	int id;
+	uint32_t extid;
+	int realplanenum;
+	int dienum;
+	int tals;
+	int talh;
+	int trp;
+	int twp;
+	int trhw;
+	int trhr;
+	unsigned long pagesize;
+	unsigned long erasesize;
+	uint32_t oobsize;
+	int rowcycle;
+	int maxbadblocks;
+	int maxvalidblocks;
+	int eccblock;
+	int eccbit;
+	int buswidth;
+	int badblockpos;	
 	unsigned long options;
 };
 
@@ -458,7 +514,7 @@ extern int nand_update_bbt (struct mtd_info *mtd, loff_t offs);
 extern int nand_default_bbt (struct mtd_info *mtd);
 extern int nand_isbad_bbt (struct mtd_info *mtd, loff_t offs, int allowbbt);
 extern int nand_erase_nand (struct mtd_info *mtd, struct erase_info *instr, int allowbbt);
-
+extern int get_flash_num(void);
 /*
 * Constants for oob configuration
 */

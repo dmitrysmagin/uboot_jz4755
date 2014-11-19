@@ -40,6 +40,10 @@ DECLARE_GLOBAL_DATA_PTR;
 # define SHOW_BOOT_PROGRESS(arg)
 #endif
 
+#ifdef CONFIG_JzRISC
+extern void flush_cache_all(void);
+#endif
+
 extern image_header_t header;           /* from cmd_bootm.c */
 
 extern int do_reset (cmd_tbl_t *cmdtp, int flag, int argc, char *argv[]);
@@ -181,9 +185,12 @@ void do_bootm_linux (cmd_tbl_t * cmdtp, int flag, int argc, char *argv[],
 	printf ("## Transferring control to Linux (at address %08lx) ...\n",
 		(ulong) theKernel);
 #endif
-
+#if 0
 	linux_params_init (UNCACHED_SDRAM (gd->bd->bi_boot_params), commandline);
-
+#else
+	linux_params_init ((gd->bd->bi_boot_params), commandline);
+#endif
+        
 #ifdef CONFIG_MEMSIZE_IN_BYTES
 	sprintf (env_buf, "%lu", gd->ram_size);
 #ifdef DEBUG
@@ -212,6 +219,11 @@ void do_bootm_linux (cmd_tbl_t * cmdtp, int flag, int argc, char *argv[],
 
 	/* we assume that the kernel is in place */
 	printf ("\nStarting kernel ...\n\n");
+
+#ifdef CONFIG_JzRISC
+	/* flush both i&d caches before calling into linux */
+	flush_cache_all();
+#endif
 
 	theKernel (linux_argc, linux_argv, linux_env, 0);
 }

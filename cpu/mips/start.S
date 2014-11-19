@@ -22,12 +22,56 @@
  * MA 02111-1307 USA
  */
 
-
 #include <config.h>
 #include <version.h>
 #include <asm/regdef.h>
 #include <asm/mipsregs.h>
+#include <asm/addrspace.h>
+#include <asm/cacheops.h>
 
+#ifdef CONFIG_JZ4730
+#include <asm/jz4730.h>
+#endif
+#ifdef CONFIG_JZ4740
+#include <asm/jz4740.h>
+#endif
+#ifdef CONFIG_JZ4750
+#include <asm/jz4750.h>
+#endif
+#ifdef CONFIG_JZ4750D
+#include <asm/jz4750d.h>
+#endif
+#ifdef CONFIG_JZ4750L
+#include <asm/jz4750l.h>
+#endif
+#ifdef CONFIG_JZ4760
+#include <asm/jz4760.h>
+#endif
+#ifdef CONFIG_JZ4760B
+#include <asm/jz4760b.h>
+#endif
+#ifdef CONFIG_JZ4770
+#include <asm/jz4770.h>
+#endif
+#ifdef CONFIG_JZ4810
+#include <asm/jz4810.h>
+#endif
+#if defined(CONFIG_JZ4750) || defined(CONFIG_JZ4750D) || defined(CONFIG_JZ4750L)
+#define JZ4750_NANDBOOT_CFG0 (0x55555500 | (CFG_NAND_BW8*0xff))
+#define JZ4750_NANDBOOT_CFG1 0x55555555
+#define JZ4750_NANDBOOT_CFG2 ((CFG_NAND_PAGE_SIZE==2048)&0xff0000) | ((CFG_NAND_PAGE_SIZE!=512)&0xff00) | ((CFG_NAND_ROW_CYCLE==3)&0xff)
+#endif
+
+#if defined(CONFIG_JZ4760) || defined(CONFIG_JZ4760B) || defined(CONFIG_JZ4770) || defined(CONFIG_JZ4810)
+#define JZ4760_NANDBOOT_CFG0 (0x55555500 | (CFG_NAND_BW8*0xff))
+#define JZ4760_NANDBOOT_CFG1 0x55555555
+#define JZ4760_NANDBOOT_CFG2 ((CFG_NAND_PAGE_SIZE==2048)&0xff0000) | ((CFG_NAND_PAGE_SIZE!=512)&0xff00) | ((CFG_NAND_ROW_CYCLE==3)&0xff)
+#endif
+
+#define JZ_MSCBOOT_CFG       0x4d53504c
+#define JZ_SPIBOOT_CFG0      0x55020304
+#define	CFG_SSI_GR           ((6000000 + (CFG_SPI_MAX_FREQ - 1)) / CFG_SPI_MAX_FREQ - 1)
+#define JZ_SPIBOOT_CFG1      (0x00aa55aa | (CFG_SSI_GR << 24))
 
 #define RVECENT(f,n) \
    b f; nop
@@ -40,6 +84,188 @@
 	.globl _start
 	.text
 _start:
+#if defined(CONFIG_JZ4740)
+#if !defined(CONFIG_NAND_SPL) && !defined(CONFIG_NAND_U_BOOT)
+	.word JZ4740_NORBOOT_CFG	/* fetched during NOR Boot */
+#else
+#if defined(CONFIG_NAND_SPL)
+	.word JZ4740_NANDBOOT_CFG	/* fetched during NAND Boot */
+#endif
+#endif
+#endif /* CONFIG_JZ4740 */
+#if defined(CONFIG_JZ4750) || defined(CONFIG_JZ4750D) || defined(CONFIG_JZ4750L)
+#if defined(CONFIG_NAND_SPL)
+	/* First three words fetched by CPU during NAND Boot */
+	.word JZ4750_NANDBOOT_CFG0
+	.word JZ4750_NANDBOOT_CFG1
+	.word JZ4750_NANDBOOT_CFG2
+#elif defined(CONFIG_JZ4750L) && defined(CONFIG_MSC_SPL)
+	.word JZ_MSCBOOT_CFG
+#elif !defined(CONFIG_JZ4750L) && defined(CONFIG_SPI_SPL)
+	.word JZ_SPIBOOT_CFG0
+	.word JZ_SPIBOOT_CFG1
+#elif !defined(CONFIG_NAND_U_BOOT) && !defined(CONFIG_MSC_U_BOOT) && !defined(CONFIG_SPI_U_BOOT)
+	.word JZ4750_NORBOOT_CFG	/* fetched during NOR Boot */
+#endif
+#endif /* defined(CONFIG_JZ4750) || defined(CONFIG_JZ4750D) || defined(CONFIG_JZ4750L) */
+#if defined(CONFIG_JZ4760) || (CONFIG_JZ4760B) || defined(CONFIG_JZ4770) || defined(CONFIG_JZ4810)
+#if defined(CONFIG_NAND_SPL)
+	/* First three words fetched by CPU during NAND Boot */
+	/* First 4 flags fetched by CPU during NAND Boot */
+	//	Flag name		Length(in byte)		Location(in byte)
+	//  	buswidth_flag		64			0
+	//  	rowcycle_flag		32			64
+	//  	pagesize_flag1		32			96
+	//  	pagesize_flag0		32			128
+
+	//	buswidth_flag	--	bus width(8/16bit)
+	//  	0x55			8bit
+	//  	0xaa			16bit
+	//	rowcycle_flag	--	row cycle(2/3)
+	//	0x55			2
+	//	0xaa			3
+	//   pagesize_flag1, pagesize_flag0	--	pagesize(byte)
+	//  	0x55		0x55			512
+	//	0x55		0xaa			2048
+	//	0xaa		0x55			4096
+	//	0xaa		0xaa			8192
+
+	/* buswidth_flag */
+#if (CFG_NAND_BW8 == 1)
+#ifndef	CONFIG_AS_USB_BOOT
+	.word	0x55555555
+	.word	0x55555555
+#else
+	b reset
+	nop
+#endif
+
+	.word	0x55555555
+	.word	0x55555555
+	.word	0x55555555
+	.word	0x55555555
+	.word	0x55555555
+	.word	0x55555555
+	.word	0x55555555
+	.word	0x55555555
+	.word	0x55555555
+	.word	0x55555555
+	.word	0x55555555
+	.word	0x55555555
+	.word	0x55555555
+	.word	0x55555555
+#else
+#ifndef	CONFIG_AS_USB_BOOT
+	.word	0xaaaaaaaa
+	.word	0xaaaaaaaa
+#else
+	b reset
+	nop
+#endif
+	.word	0xaaaaaaaa
+	.word	0xaaaaaaaa
+	.word	0xaaaaaaaa
+	.word	0xaaaaaaaa
+	.word	0xaaaaaaaa
+	.word	0xaaaaaaaa
+	.word	0xaaaaaaaa
+	.word	0xaaaaaaaa
+	.word	0xaaaaaaaa
+	.word	0xaaaaaaaa
+	.word	0xaaaaaaaa
+	.word	0xaaaaaaaa
+	.word	0xaaaaaaaa
+	.word	0xaaaaaaaa
+#endif
+	/* rowcycle_flag */
+#if (CFG_NAND_ROW_CYCLE == 3)
+	.word	0xaaaaaaaa
+	.word	0xaaaaaaaa
+	.word	0xaaaaaaaa
+	.word	0xaaaaaaaa
+	.word	0xaaaaaaaa
+	.word	0xaaaaaaaa
+	.word	0xaaaaaaaa
+	.word	0xaaaaaaaa
+#else
+	.word	0x55555555
+	.word	0x55555555
+	.word	0x55555555
+	.word	0x55555555
+	.word	0x55555555
+	.word	0x55555555
+	.word	0x55555555
+	.word	0x55555555
+#endif
+	/* pagesize_flag1 */
+#if (CFG_NAND_PAGE_SIZE < 4096)
+	.word	0x55555555
+	.word	0x55555555
+	.word	0x55555555
+	.word	0x55555555
+	.word	0x55555555
+	.word	0x55555555
+	.word	0x55555555
+	.word	0x55555555
+#else
+	.word	0xaaaaaaaa
+	.word	0xaaaaaaaa
+	.word	0xaaaaaaaa
+	.word	0xaaaaaaaa
+	.word	0xaaaaaaaa
+	.word	0xaaaaaaaa
+	.word	0xaaaaaaaa
+	.word	0xaaaaaaaa
+#endif
+	/* pagesize_flag0 */
+#if ((CFG_NAND_PAGE_SIZE == 512) || (CFG_NAND_PAGE_SIZE == 4096))
+	.word	0x55555555
+	.word	0x55555555
+	.word	0x55555555
+	.word	0x55555555
+	.word	0x55555555
+	.word	0x55555555
+	.word	0x55555555
+	.word	0x55555555
+#else
+	.word	0xaaaaaaaa
+	.word	0xaaaaaaaa
+	.word	0xaaaaaaaa
+	.word	0xaaaaaaaa
+	.word	0xaaaaaaaa
+	.word	0xaaaaaaaa
+	.word	0xaaaaaaaa
+	.word	0xaaaaaaaa
+#endif
+#elif defined(CONFIG_MSC_SPL)
+	.word   JZ_MSCBOOT_CFG
+#elif defined(CONFIG_SPI_SPL)
+	.word   JZ_SPIBOOT_CFG0
+	.word   JZ_SPIBOOT_CFG1
+#else
+	.word JZ4760_NORBOOT_CFG
+#endif
+
+#if 0	/* test gpio */
+	la	$29, GPIO_BASE
+	li	$9, 0x00000004		// GPE2  (32*4+2)
+	sw	$9, 0x418($29)		// PEINTC
+	sw	$9, 0x424($29)		// PEMASKS
+	sw	$9, 0x438($29)		// PEPAT1C
+
+1:
+	sw	$9, 0x444($29)		// PEPAT0S
+	nop;nop;nop;nop;nop;nop;nop;nop
+	sw	$9, 0x448($29)		// PEPAT0C
+	nop;nop;nop;nop;nop;nop;nop;nop
+	b 1b
+        nop
+#endif
+
+
+#endif /* CONFIG_JZ4760 || defined(CONFIG_JZ4770) || CONFIG_JZ4810 */
+
+#if !defined(CONFIG_JzRISC)
 	RVECENT(reset,0)	/* U-boot entry point */
 	RVECENT(reset,1)	/* software reboot */
 #if defined(CONFIG_INCA_IP)
@@ -206,14 +432,116 @@ _start:
 	.word   0x00000000
 #endif /* CONFIG_PURPLE */
 	.align 4
-reset:
+#endif /* CONFIG_JzRISC */
 
+reset:
+#if 0
+	/* test on jz4760b */
+	la	t0, GPIO_BASE
+	/* group */
+	li	t1, 0
+	sll	t1, t1, 8
+	li	t2, 1
+	/* index in group, 0 ~ 31 */
+	sll	t2, t2, 25
+
+	/* __gpio_as_output */
+	/* FUNC */
+	addiu	t3, t0,	0x48
+	or	t3, t3, t1
+	sw	t2, 0(t3)
+
+	/* SELC */
+	addiu	t3, t0, 0x58
+	or	t3, t3, t1
+	sw	t2, 0(t3)
+
+	/* DIRS */
+	addiu	t3, t0, 0x64
+	or	t3, t3, t1
+	sw	t2, 0(t3)
+
+1:
+	/* __gpio_set_pin */
+	addiu	t3, t0, 0x14
+	or	t3, t3, t1
+	sw	t2, 0(t3)
+
+	nop;nop;nop;nop;nop;nop;nop;nop
+
+	/* __gpio_clear_pin */
+	addiu	t3, t0, 0x18
+	or	t3, t3, t1
+	sw	t2, 0(t3)
+
+	nop;nop;nop;nop;nop;nop;nop;nop
+
+	b	1b
+	nop
+#endif
+
+#if defined(CONFIG_NAND_SPL) || defined(CONFIG_MSC_SPL) || defined(CONFIG_SPI_SPL) || (!defined(CONFIG_NAND_U_BOOT) && !defined(CONFIG_MSC_U_BOOT) && !defined(CONFIG_SPI_U_BOOT))
+
+#ifdef CONFIG_JZ4730
+
+	/* Disable interrupts */
+	la	t0, INTC_IMR
+	li	t1, 0xffffffff
+	sw	t1, 0(t0)
+
+	/*
+	 * Clear SCR.HGP
+	 */
+	la	t0, CPM_SCR
+	lw	t1, 0(t0)
+	ori	t1, 0x8
+	xori	t1, 0x8
+	sw	t1, 0(t0)
+
+	/*
+	 * Set usb port0 as host
+	 */
+	la	t0, HARB_HAPOR
+	lw	t1, 0(t0)
+	ori	t1, HARB_HAPOR_UCHSEL
+	sw	t1, 0(t0)
+
+	/*
+	 * Check reset status
+	 */
+	la	t0, CPM_RSTR
+	lw	t1, 0(t0)
+	andi	t1, 0x4
+	bnez	t1, resume_from_hibernate
+	nop
+#endif /* CONFIG_JZ4730 */
+
+#if !defined(CONFIG_AS_USB_BOOT) && (defined(CONFIG_JZ4760) || defined(CONFIG_JZ4760B) || defined(CONFIG_JZ4770))
+	/*
+	 * Check reset status
+	 */
+	la	t0, CPM_RSR
+	lw	t1, 0(t0)
+	andi	t1, 0x4
+	bnez	t1, resume_from_sleep
+	nop
+#endif /* CONFIG_JZ4760 */
+
+#if !defined(CONFIG_NAND_SPL) && !defined(CONFIG_MSC_SPL) && !defined(CONFIG_SPI_SPL)
 	/* Clear watch registers.
 	 */
 	mtc0	zero, CP0_WATCHLO
 	mtc0	zero, CP0_WATCHHI
+#endif
 
 	/* STATUS register */
+#ifdef CONFIG_JzRISC
+	/*
+	 * CU0=UM=EXL=IE=0, BEV=ERL=1, IP2~7=1
+	 */
+	li	t0, 0x0040FC04
+	mtc0	t0, CP0_STATUS
+#else
 #ifdef  CONFIG_TB0229
 	li	k0, ST0_CU0
 #else
@@ -222,17 +550,30 @@ reset:
 	li	k1, ~ST0_IE
 	and	k0, k1
 	mtc0	k0, CP0_STATUS
+#endif
 
 	/* CAUSE register */
+#ifdef CONFIG_JzRISC
+	/* IV=1, use the specical interrupt vector (0x200) */
+	li	t1, 0x00800000
+	mtc0	t1, CP0_CAUSE
+#else
 	mtc0	zero, CP0_CAUSE
+#endif
 
+#ifndef CONFIG_JzRISC
 	/* Init Timer */
 	mtc0	zero, CP0_COUNT
 	mtc0	zero, CP0_COMPARE
+#endif
 
+#endif /* defined(CONFIG_NAND_SPL) || defined(CONFIG_MSC_SPL) || defined(CONFIG_SPI_SPL) || nor boot */
+
+#if !defined(CONFIG_NAND_U_BOOT) && !defined(CONFIG_MSC_U_BOOT) && !defined(CONFIG_SPI_U_BOOT)
 	/* CONFIG0 register */
 	li	t0, CONF_CM_UNCACHED
 	mtc0	t0, CP0_CONFIG
+#endif
 
 	/* Initialize GOT pointer.
 	*/
@@ -252,38 +593,136 @@ reset:
 	nop
 #endif
 
+/* JzRISC will init external memory in board_init_f,
+   which uses cache as stack and calls into C code. */
+#ifndef CONFIG_JzRISC
 	/* Initialize any external memory.
 	 */
 	la      t9, lowlevel_init
 	jalr    t9
 	nop
+#endif
 
+#if !defined(CONFIG_NAND_U_BOOT) && !defined(CONFIG_MSC_U_BOOT) && !defined(CONFIG_SPI_U_BOOT)
 	/* Initialize caches...
 	 */
+#ifdef CONFIG_JzRISC
+	.set	mips32
+	mtc0	zero, CP0_TAGLO
+	mtc0	zero, CP0_TAGHI
+
+	li	t0, K0BASE
+	addu	t1, t0, CFG_DCACHE_SIZE
+1:
+	cache	Index_Store_Tag_D, 0(t0)
+	bne	t0, t1, 1b
+	addiu	t0, t0, CFG_CACHELINE_SIZE
+
+	li	t0, K0BASE
+	addu	t1, t0, CFG_ICACHE_SIZE
+2:
+	cache	Index_Store_Tag_I, 0(t0)
+	bne	t0, t1, 2b
+	addiu	t0, t0, CFG_CACHELINE_SIZE
+
+	/* Invalidate BTB */
+	mfc0	t0, CP0_CONFIG, 7
+	nop
+	ori	t0, 2
+	mtc0	t0, CP0_CONFIG, 7
+	nop
+
+	.set	mips2
+#else
 	la      t9, mips_cache_reset
 	jalr    t9
 	nop
+#endif
 
 	/* ... and enable them.
 	 */
 	li	t0, CONF_CM_CACHABLE_NONCOHERENT
 	mtc0	t0, CP0_CONFIG
+	nop
 
+#endif /* !defined(CONFIG_NAND_U_BOOT) && !defined(CONFIG_MSC_U_BOOT) && !defined(CONFIG_SPI_U_BOOT) */
 
 	/* Set up temporary stack.
 	 */
+#ifndef CONFIG_JzRISC
 	li	a0, CFG_INIT_SP_OFFSET
 	la      t9, mips_cache_lock
 	jalr    t9
 	nop
+#endif
 
+#if defined(CONFIG_NAND_SPL) || defined(CONFIG_MSC_SPL) || defined(CONFIG_SPI_SPL)
+	la	sp, 0x80004000
+	la	t9, spl_boot
+
+#if 0	/* test gpio */
+	la	$29, GPIO_BASE
+	li	$9, 0x00000004		// GPE2  (32*4+2)
+	sw	$9, 0x418($29)		// PEINTC
+	sw	$9, 0x424($29)		// PEMASKS
+	sw	$9, 0x438($29)		// PEPAT1C
+
+1:
+	sw	$9, 0x444($29)		// PEPAT0S
+	nop;nop;nop;nop;nop;nop;nop;nop
+	sw	$9, 0x448($29)		// PEPAT0C
+	nop;nop;nop;nop;nop;nop;nop;nop
+	b 1b
+        nop
+#endif
+
+	j	t9
+	nop
+#else
+#if defined(CONFIG_JZ4760) || defined(CONFIG_JZ4760B) || defined(CONFIG_JZ4770) || defined(CONFIG_JZ4810)
+	/* Sdram will be access when "la sp, 0(t0)", so it should be
+	 * configured before accessing,	but it needn't be configured
+	 * again when nand boot for it has been initialized in spl
+	 */
+#if 0	/* test gpio */
+	la	$29, GPIO_BASE
+	li	$9, 0x00200000		// CS1  (32*0+21)
+	sw	$9, 0x048($29)		// PCFUNC
+	sw	$9, 0x058($29)		// PCSELC
+	sw	$9, 0x064($29)		// PCDIRS
+
+1:
+	sw	$9, 0x014($29)		// PCDATS
+	nop;nop;nop;nop;nop;nop;nop;nop
+	sw	$9, 0x018($29)		// PCDATC
+	nop;nop;nop;nop;nop;nop;nop;nop
+	b 1b
+        nop
+#endif
+#if !defined(CONFIG_NAND_U_BOOT) && !defined(CONFIG_MSC_U_BOOT) && !defined(CONFIG_SPI_U_BOOT)
+#if defined(CONFIG_DDRC)
+	/* config as ddr */
+	la	t0, DDRC_BASE
+	li	t1, 0x00000001
+	sw	t1, 0x8(t0)
+	li	t1, 0x00000040
+	sw	t1, 0x4(t0)
+	li	t1, 0x000020f8
+	sw	t1, 0x24(t0)
+#else /* sdram */
+	/* config as sdr */
+	la	t0, DDRC_BASE
+	li	t1, 0x10000000
+	sw	t1, 0x4(t0)
+#endif /*config_ddrc*/
+#endif
+#endif /* Jz4760 || jz4810 */
 	li	t0, CFG_SDRAM_BASE + CFG_INIT_SP_OFFSET
 	la	sp, 0(t0)
 
 	la	t9, board_init_f
 	j	t9
 	nop
-
 
 /*
  * void relocate_code (addr_sp, gd, addr_moni)
@@ -300,25 +739,29 @@ reset:
 relocate_code:
 	move	sp, a0		/* Set new stack pointer		*/
 
-	li	t0, CFG_MONITOR_BASE
+	li	t0, TEXT_BASE
 	la	t3, in_ram
 	lw	t2, -12(t3)	/* t2 <-- uboot_end_data	*/
 	move	t1, a2
+	subu	t2, t2, t0	/* total count in bytes */
+	srl	t2, t2, 2	/* total count in word */
+	li	t4, 0xa0000000
+	or	t0, t0, t4	/* uncached address */
 
 	/*
 	 * Fix GOT pointer:
 	 *
-	 * New GOT-PTR = (old GOT-PTR - CFG_MONITOR_BASE) + Destination Address
+	 * New GOT-PTR = (old GOT-PTR - TEXT_BASE) + Destination Address
 	 */
 	move	t6, gp
-	sub	gp, CFG_MONITOR_BASE
+	subu	gp, TEXT_BASE
 	add	gp, a2			/* gp now adjusted		*/
-	sub	t6, gp, t6		/* t6 <-- relocation offset	*/
+	subu	t6, gp, t6		/* t6 <-- relocation offset	*/
 
 	/*
-	 * t0 = source address
-	 * t1 = target address
-	 * t2 = source end address
+	 * t0 = source address (in flash)
+	 * t1 = target address (in memory)
+	 * t2 = total count in word
 	 */
 	/* On the purple board we copy the code earlier in a special way
 	 * in order to solve flash problems
@@ -326,14 +769,44 @@ relocate_code:
 #ifndef CONFIG_PURPLE
 1:
 	lw	t3, 0(t0)
+	addiu	t0, 4
+	addiu	t2, t2, -1
 	sw	t3, 0(t1)
-	addu	t0, 4
-	ble	t0, t2, 1b
-	addu	t1, 4			/* delay slot			*/
+	bgtz	t2, 1b
+	addiu	t1, 4			/* delay slot			*/
 #endif
 
 	/* If caches were enabled, we would have to flush them here.
 	 */
+#ifdef CONFIG_JzRISC
+	/* flush d-cache */
+	.set	mips32
+	li	t0, KSEG0
+	addu	t1, t0, CFG_DCACHE_SIZE
+2:
+	cache	Index_Writeback_Inv_D, 0(t0)
+	bne	t0, t1, 2b
+	addi	t0, CFG_CACHELINE_SIZE
+
+	sync
+
+	/* flush i-cache */
+	li	t0, KSEG0
+	addu	t1, t0, CFG_ICACHE_SIZE
+3:
+	cache	Index_Invalidate_I, 0(t0)
+	bne	t0, t1, 3b
+	addi	t0, CFG_CACHELINE_SIZE
+
+	/* Invalidate BTB */
+	mfc0	t0, CP0_CONFIG, 7
+	nop
+	ori	t0, 2
+	mtc0	t0, CP0_CONFIG, 7
+	nop
+
+	.set	mips0
+#endif
 
 	/* Jump to where we've relocated ourselves.
 	 */
@@ -349,17 +822,17 @@ in_ram:
 	/* Now we want to update GOT.
 	 */
 	lw	t3, -4(t0)	/* t3 <-- num_got_entries	*/
-	addi	t4, gp, 8	/* Skipping first two entries.	*/
+	addiu	t4, gp, 8	/* Skipping first two entries.	*/
 	li	t2, 2
 1:
 	lw	t1, 0(t4)
 	beqz	t1, 2f
-	add	t1, t6
+	addu	t1, t6
 	sw	t1, 0(t4)
 2:
-	addi	t2, 1
+	addiu	t2, 1
 	blt	t2, t3, 1b
-	addi	t4, 4		/* delay slot			*/
+	addiu	t4, 4		/* delay slot			*/
 
 	/* Clear BSS.
 	 */
@@ -380,7 +853,9 @@ in_ram:
 
 	.end	relocate_code
 
+#endif /* defined(CONFIG_NAND_SPL) || defined(CONFIG_MSC_SPL) || defined(CONFIG_SPI_SPL) */
 
+#if !defined(CONFIG_JzRISC)
 	/* Exception handlers.
 	 */
 romReserved:
@@ -388,3 +863,136 @@ romReserved:
 
 romExcHandle:
 	b romExcHandle
+#endif
+
+#ifdef CONFIG_JZ4730
+
+/* These are the runtime values, modify them according to your platform. */
+#define PLCR1_VAL     0x1b000520
+#define CFCR_VAL      0x0c526220
+
+#define DMCR_VAL0     0x042a3211
+#define DMCR_VAL1     0x05aa3211 /*(DMCR_VAL0|EMC_DMCR_RFSH|EMC_DMCR_MRSET)*/
+
+#define RTCOR_VAL     0x10
+#define RTCSR_VAL     0x83
+
+	/*
+	 * cpu was reset from hibernate mode
+	 */
+resume_from_hibernate:
+	/*
+	 * Init PLL
+	 */
+	la	t0, 0xB0000000	/* CFCR */
+	li	t1, CFCR_VAL
+	sw	t1, 0(t0)
+
+	la	t0, 0xB0000010	/* PLCR1 */
+	li	t1, PLCR1_VAL
+	sw	t1, 0(t0)
+	nop;nop;nop;nop
+
+	/* Init caches */
+	.set	mips32
+	mtc0	zero, CP0_TAGLO
+	mtc0	zero, CP0_TAGHI
+
+	li	t0, K0BASE
+	addu	t1, t0, CFG_DCACHE_SIZE
+1:
+	cache	Index_Store_Tag_D, 0(t0)
+	cache	Index_Store_Tag_I, 0(t0)
+	bne	t0, t1, 1b
+	addiu	t0, t0, CFG_CACHELINE_SIZE
+
+	/*
+	 * Init SDRAM
+	 */
+	la	t0, 0xB0010070	/* GPALR2 */
+	lw	t1, 0(t0)
+	li	t2, 0x3FFFFFFF
+	and	t1, t2
+	li	t2, 0x40000000
+	or	t1, t2
+	sw	t1, 0(t0)
+
+	la	t0, 0xB0010074	/* GPAUR2 */
+	lw	t1, 0(t0)
+	li	t2, 0xFFFF0000
+	and	t1, t2
+	li	t2, 0x00005555
+	or	t1, t2
+	sw	t1, 0(t0)
+
+	la	t0, 0xB3010000	/* EMC base address */
+
+	li	t1, DMCR_VAL0	/* DMCR */
+	sw	t1, 0x80(t0)
+
+	li	t1, RTCOR_VAL
+	sh	t1, 0x8c(t0)	/* RTCOR */
+
+	li	t1, RTCSR_VAL
+	sh	t1, 0x84(t0)	/* RTCSR */
+
+	/* precharge all chip-selects */
+	ori	t1, t0, 0xa088
+	sb	$0, 0(t1)
+	ori	t1, t0, 0xb088
+	sb	$0, 0(t1)
+
+	/* delay about 200us */
+	li	t1, 0x20000
+1:
+	bnez	t1, 1b
+	sub	t1, 1
+
+	la	t1, DMCR_VAL1	/* DMCR */
+	sw	t1, 0x80(t0)
+
+	/* write sdram mode register for each chip-select */
+	ori	t1, t0, 0xa088
+	sb	$0, 0(t1)
+	ori	t1, t0, 0xb088
+	sb	$0, 0(t1)
+
+	/*
+	 * jump to resume entry point
+	 */
+	la	t0, CPM_SPR
+	lw	t1, 0(t0)
+	li	t0, 0x80000000
+	or	t0, t1
+
+	j	t0
+	nop
+
+#endif /* CONFIG_JZ4730 */
+
+#if defined (CONFIG_JZ4760) || defined(CONFIG_JZ4760B) || defined(CONFIG_JZ4770)
+
+	/*
+	 * cpu was reset from sleep  mode(when power down p0)
+	 */
+resume_from_sleep:
+
+	/*
+	 * jump to resume entry point
+	 */
+#if defined(CONFIG_JZ4760B)
+	la	t0, 0xB3020050
+	li	t1, 0x0000ff00
+	nop
+	sw	t1, 0(t0)
+	nop
+#endif	
+	la	t0, CPM_CPSPR
+	lw	t1, 0(t0)
+	li	t0, 0x80000000
+	or	t0, t1
+
+	j	t0
+	nop
+
+#endif /* CONFIG_JZ4760 */

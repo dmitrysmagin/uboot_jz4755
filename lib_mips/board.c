@@ -29,6 +29,10 @@
 #include <net.h>
 #include <environment.h>
 
+#ifdef CONFIG_JZSOC
+#include <asm/jzsoc.h>
+#endif	/* CONFIG_JZSOC */
+
 DECLARE_GLOBAL_DATA_PTR;
 
 #if ( ((CFG_ENV_ADDR+CFG_ENV_SIZE) < CFG_MONITOR_BASE) || \
@@ -40,6 +44,14 @@ DECLARE_GLOBAL_DATA_PTR;
 #endif
 
 #undef DEBUG
+
+#if (CONFIG_COMMANDS & CFG_CMD_NAND)
+extern void nand_init (void);
+#endif
+
+#if defined(CONFIG_JZSOC)
+extern int jz_board_init(void);
+#endif
 
 extern int timer_init(void);
 
@@ -68,7 +80,7 @@ static ulong mem_malloc_brk;
  */
 static void mem_malloc_init (void)
 {
-	ulong dest_addr = CFG_MONITOR_BASE + gd->reloc_off;
+	ulong dest_addr = TEXT_BASE + gd->reloc_off;
 
 	mem_malloc_end = dest_addr;
 	mem_malloc_start = dest_addr - TOTAL_MALLOC_LEN;
@@ -101,7 +113,23 @@ static int init_func_ram (void)
 #endif
 	puts ("DRAM:  ");
 
+#if defined(CONFIG_JZSOC)
+#ifndef EMC_LOW_SDRAM_SPACE_SIZE
+#define EMC_LOW_SDRAM_SPACE_SIZE 0x08000000 /* 128M */
+#endif
+	unsigned int ram_size;
+	ram_size = initdram (board_type);
+
+	if ( ram_size > EMC_LOW_SDRAM_SPACE_SIZE ) {
+		print_size (ram_size, "\t");
+		printf("Ram size > EMC_LOW_SDRAM_SPACE_SIZE, set ram size = EMC_LOW_SDRAM_SPACE_SIZE: ");
+		ram_size = EMC_LOW_SDRAM_SPACE_SIZE;
+	}
+
+	if ((gd->ram_size = ram_size) > 0) {
+#else
 	if ((gd->ram_size = initdram (board_type)) > 0) {
+#endif	/* CONFIG_JZSOC */
 		print_size (gd->ram_size, "\n");
 		return (0);
 	}
@@ -159,6 +187,9 @@ static int init_baudrate (void)
 typedef int (init_fnc_t) (void);
 
 init_fnc_t *init_sequence[] = {
+#if defined(CONFIG_JZSOC)
+	jz_board_init,		/* init gpio/clocks/dram etc. */
+#endif
 	timer_init,
 	env_init,		/* initialize environment */
 #ifdef CONFIG_INCA_IP
@@ -172,14 +203,16 @@ init_fnc_t *init_sequence[] = {
 	init_func_ram,
 	NULL,
 };
-
+#ifdef CFG_JZ_LINUX_RECOVERY
+extern void jz_recovery_handle(void);
+#endif
 
 void board_init_f(ulong bootflag)
 {
 	gd_t gd_data, *id;
 	bd_t *bd;
 	init_fnc_t **init_fnc_ptr;
-	ulong addr, addr_sp, len = (ulong)&uboot_end - CFG_MONITOR_BASE;
+	ulong addr, addr_sp, len = (ulong)&uboot_end - TEXT_BASE;
 	ulong *s;
 #ifdef CONFIG_PURPLE
 	void copy_code (ulong);
@@ -212,6 +245,12 @@ void board_init_f(ulong bootflag)
 	 */
 	addr &= ~(4096 - 1);
 	debug ("Top of RAM usable for U-Boot at: %08lx\n", addr);
+
+#ifdef CONFIG_LCD
+	/* reserve memory for LCD display (always full pages) */
+	addr = lcd_setmem (addr);
+	gd->fb_base = addr;
+#endif /* CONFIG_LCD */
 
 	/* Reserve memory for U-Boot code, data & bss
 	 * round down to next 16 kB limit
@@ -310,7 +349,7 @@ void board_init_r (gd_t *id, ulong dest_addr)
 
 	debug ("Now running in RAM - U-Boot at: %08lx\n", dest_addr);
 
-	gd->reloc_off = dest_addr - CFG_MONITOR_BASE;
+	gd->reloc_off = dest_addr - TEXT_BASE;
 
 	monitor_flash_len = (ulong)&uboot_end_data - dest_addr;
 
@@ -347,6 +386,10 @@ void board_init_r (gd_t *id, ulong dest_addr)
 	env_name_spec += gd->reloc_off;
 #endif
 
+#ifdef CONFIG_POST
+	post_reloc ();
+#endif
+
 	/* configure available FLASH banks */
 	size = flash_init();
 	display_flash_config (size);
@@ -363,7 +406,16 @@ void board_init_r (gd_t *id, ulong dest_addr)
 	/* initialize malloc() area */
 	mem_malloc_init();
 	malloc_bin_reloc();
+#if !defined(CONFIG_FPGA) || defined(CONFIG_NAND_U_BOOT) || defined(CONFIG_NAND_SPL)
+#if (CONFIG_COMMANDS & CFG_CMD_NAND)
+	puts ("NAND:");
+	nand_init();		/* go init the NAND */
+#endif
+#endif
 
+#ifdef CFG_JZ_LINUX_RECOVERY
+	jz_recovery_handle();
+#endif
 	/* relocate environment function pointers etc. */
 	env_relocate();
 
