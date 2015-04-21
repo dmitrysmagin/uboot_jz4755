@@ -13,10 +13,10 @@ int main(int argc,char *argv[])
 {
 	int fd;
 
-	uint32_t p1,ps1;
-	uint32_t p2,ps2;
-	uint32_t p3,ps3;
-	uint32_t p4,ps4;
+	uint64_t p1,ps1;
+	uint64_t p2,ps2;
+	uint64_t p3,ps3;
+	uint64_t p4,ps4;
 
 	uint8_t pt1,pt2,pt3,pt4;
 	uint8_t block[512];
