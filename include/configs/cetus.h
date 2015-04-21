@@ -41,23 +41,22 @@
 #define CONFIG_JZSOC		1  /* Jz SoC */
 #define CONFIG_JZ4750D		1  /* Jz4750 SoC */
 #define CONFIG_CETUS		1  /* CETUS validation board */
-#define CONFIG_LCD		 /* LCD support */
+
+//#define CONFIG_LCD		 /* LCD support */
 //#define CONFIG_SLCD                 /* LCD support */
 
 //#define  CONFIG_SHOW_BOOT_PROGRESS        //add 200901103
 
-#define LOW_BATTERY_DATA 3350
 
-#ifdef CONFIG_LCD        /* LCD support */
-#define CONFIG_JZ4750_LCD_L430
-#define  LCD_BPP LCD_COLOR32
+#ifndef CONFIG_SLCD        /* LCD support */
+#define CONFIG_JZ4750_LCD_AUO_A043FL01V2 
 #endif
 
 #ifdef CONFIG_SLCD		
 #define CONFIG_JZ_SLCD_SPFD5420A 
 #endif
 
-//#define LCD_BPP			5  /* 5: 18,24,32 bits per pixel */
+#define LCD_BPP			5  /* 5: 18,24,32 bits per pixel */
 #define CFG_WHITE_ON_BLACK
 #define CONFIG_LCD_LOGO
 
@@ -210,7 +209,7 @@
 #define PTN_ROOTFS_SIZE             (100 * 0x100000)
 #define PTN_EBOOK_SIZE           	(60 * 0x100000)
 #define PTN_QTE_SIZE           		(80 * 0x100000)
-#define PTN_USERDATA_SIZE           (3400 * 0x100000)
+#define PTN_USERDATA_SIZE           (3500 * 0x100000)
 
 //#define PTN_CACHE_SIZE              (128 * 0x100000)
 

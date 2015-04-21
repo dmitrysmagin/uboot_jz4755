@@ -23,7 +23,6 @@
 #include <asm/mipsregs.h>
 #include <asm/jz4750d.h>
 
-
 #if defined(CFG_CHIP_COUNT)
 extern int chip_count( void );
 
@@ -126,7 +125,7 @@ static void gpio_init(void)
 	__gpio_as_i2c();
 	__cpm_start_i2c();
 }
-int power_off_ub(void)
+static int power_off_ub(void)
 {
 	//printf("Put CPU into hibernate mode.\n");
 
@@ -335,23 +334,11 @@ unsigned int get_second_time_battery(void)
   return date_diff2;
 }
 unsigned int date_diff1,date_diff2;
-int get_battery_mv(void)
-{
-  mv = 0;
-  date_diff1 = get_first_time_battery();
-  date_diff2 = get_second_time_battery();
-
-  if(date_diff1 >= date_diff2)
-    mv = mv_array_2[COUNT_TIMES];
-  else
-    mv = mv_array_1[COUNT_TIMES];
-  return mv;
-}
 void board_early_init(void)
 {
   gpio_init();
   sadc_init_clock(3);
-//  mv = get_battery_val();
+  mv = get_battery_val();
   int i;
   mv = 0;
   date_diff1 = get_first_time_battery();
@@ -443,19 +430,14 @@ int checkboard (void)
 	printf("%s Board: Ingenic CETUS (CPU Speed %d MHz)\n",__TIME__,
 	       gd->cpu_clk/1000000);
 
-        return 0;
-
         printf(" %s %s mv is %d read_count is %d\n",__TIME__,__FUNCTION__,mv,read_count);
-        //while (!(REG_RTC_RCR & RTC_RCR_WRDY));
-        //printf("REG_RTC_HWFCR is 0x%x\n",REG_RTC_HWFCR);
-        //printf_test_rtc(); 
+        while (!(REG_RTC_RCR & RTC_RCR_WRDY));
+        printf("REG_RTC_HWFCR is 0x%x\n",REG_RTC_HWFCR);
+        printf_test_rtc(); 
         //led_flush_test(1);  
         if(mv < 3350 )
           power_off_ub();
-       display_battery_null();
-        extern void turn_lcd_backlight(int i);
-        turn_lcd_backlight(100);
-        while(1);
-        return 0; /* success */
+
+	return 0; /* success */
 }
 

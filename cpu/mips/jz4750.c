@@ -575,7 +575,7 @@ int jz_board_init(void)
         led_flush_test(1);
         temp_delay(1);
 	serial_init();
-        //serial_puts("\n\njz_board_init 1\n");
+        serial_puts("\n\njz_board_init 1\n");
         led_flush_test(0);  
         temp_delay(1);
         led_flush_test(1);
@@ -596,16 +596,16 @@ int jz_board_init(void)
         i = 10;
         while(i--)
           temp_delay(1);
-        //serial_puts("\n\njz_board_init 2\n");
+        serial_puts("\n\njz_board_init 2\n");
 
 	sdram_init();        /* init sdram memory */
-        //serial_puts("\n\njz_board_init 3\n");
+        serial_puts("\n\njz_board_init 3\n");
 
 #endif
 #if defined CONFIG_MSC_U_BOOT
 	//pll_init();          /* init PLL */
 #endif
-        //serial_puts("\n\njz_board_init 4\n");
+        serial_puts("\n\njz_board_init 4\n");
 
 	calc_clocks();       /* calc the clocks */
 #ifndef CONFIG_FPGA
