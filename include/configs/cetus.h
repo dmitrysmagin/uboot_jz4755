@@ -77,6 +77,7 @@
 #define CONFIG_ENV_OVERWRITE
 #define CONFIG_MMC      	1
 #define CONFIG_FAT      	1    
+#define CONFIG_DOS_PARTITION	1
 #define CONFIG_SUPPORT_VFAT 	1
 #if 0
 #define CONFIG_COMMANDS		(CONFIG_CMD_DFL | \
