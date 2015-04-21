@@ -1,1 +1,0 @@
-/home/sbhuang/tools/uboot/u-boot-last/cpu/mips/jz_serial.c
