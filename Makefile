@@ -3070,6 +3070,7 @@ atstk1002_config	:	unconfig
 #########################################################################
 
 clean:
+	find $(OBJTREE) -type l | xargs rm -f
 	find $(OBJTREE) -type f \
 		\( -name 'core' -o -name '*.bak' -o -name '*~' \
 		-o -name '*.o'  -o -name '*.a'  \) -print \
@@ -3085,6 +3086,7 @@ clean:
 	rm -f $(obj)tools/easylogo/easylogo $(obj)tools/bmp_logo
 	rm -f $(obj)tools/gdb/astest $(obj)tools/gdb/gdbcont $(obj)tools/gdb/gdbsend
 	rm -f $(obj)tools/env/fw_printenv $(obj)tools/env/fw_setenv
+	rm -f $(obj)tools/mkuartconfig $(obj)tools/mbr/mkmbr
 	rm -f $(obj)board/cray/L1/bootscript.c $(obj)board/cray/L1/bootscript.image
 	rm -f $(obj)board/netstar/eeprom $(obj)board/netstar/crcek $(obj)board/netstar/crcit
 	rm -f $(obj)board/netstar/*.srec $(obj)board/netstar/*.bin
