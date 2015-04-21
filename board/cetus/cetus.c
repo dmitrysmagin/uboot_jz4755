@@ -23,27 +23,6 @@
 #include <asm/mipsregs.h>
 #include <asm/jz4750d.h>
 
-#define ADD_BOOTPIC 
-#ifdef ADD_BOOTPIC 
-#include "bootpic1.h"
-#if 0
-//#include "bootpic2.h"
-#include "bootpic3.h"
-//#include "bootpic4.h"
-#include "bootpic5.h"
-//#include "bootpic6.h"
-#include "bootpic7.h"
-//#include "bootpic8.h"
-#include "bootpic9.h"
-//#include "bootpic10.h"
-#include "bootpic11.h"
-//#include "bootpic12.h"
-#include "bootpic13.h"
-//#include "bootpic14.h"
-#include "bootpic15.h"
-#endif
-#endif
-
 
 #if defined(CFG_CHIP_COUNT)
 extern int chip_count( void );
@@ -290,131 +269,6 @@ int usb_detect()
 //----------------------------------------------------------------------
 // board early init routine
 
-#ifdef ADD_BOOTPIC 
-void ready_bootpic_mem(void)
-{
-  short *p = 0x83000000;
-  int i;
-  //printf("%s %d\n",__FILE__,__LINE__);
-  for( i = 0; i < 480*272; i++)
-  {
-    *p = l009_bootpic1[i];
-    p++;
-  }
-  const unsigned short carlos_sexi[8] = {0x23,0x83,0xe1,0x38,0x24,0xf0,0x23,0x45};
-  for(  i = 0; i < 8; i += 1)
-  {
-    *p++ = carlos_sexi[i];
-  }
-
-  //printf("%s %d\n",__FILE__,__LINE__);
-  flush_cache_all();
-  return;
-
- 
-#if 0
-  for( i = 0; i < 400*240; i++)
-  {
-    *p = l009_bootpic2[i];
-    p++;
-  }
-#endif
-#if 0
-  for( i = 0; i < 400*240; i++)
-  {
-    *p = l009_bootpic3[i];
-    p++;
-  }
-  printf("%s %d\n",__FILE__,__LINE__);
- 
-#if 0
-  for( i = 0; i < 400*240; i++)
-  {
-    *p = l009_bootpic4[i];
-    p++;
-  }
-#endif
-  for( i = 0; i < 400*240; i++)
-  {
-    *p = l009_bootpic5[i];
-    p++;
-  }
-printf("%s %d\n",__FILE__,__LINE__);
- 
-#if 0
-  for( i = 0; i < 400*240; i++)
-  {
-    *p = l009_bootpic6[i];
-    p++;
-  }
-#endif
-  for( i = 0; i < 400*240; i++)
-  {
-    *p = l009_bootpic7[i];
-    p++;
-  }
-printf("%s %d\n",__FILE__,__LINE__);
- 
-#if 0
-  for( i = 0; i < 400*240; i++)
-  {
-    *p = l009_bootpic8[i];
-    p++;
-  }
-#endif
-  for( i = 0; i < 400*240; i++)
-  {
-    *p = l009_bootpic9[i];
-    p++;
-  }
-printf("%s %d\n",__FILE__,__LINE__);
- 
-#if 0
-  for( i = 0; i < 400*240; i++)
-  {
-    *p = l009_bootpic10[i];
-    p++;
-  }
-#endif
-  for( i = 0; i < 400*240; i++)
-  {
-    *p = l009_bootpic11[i];
-    p++;
-  }
-printf("%s %d\n",__FILE__,__LINE__);
- 
-#if 0
-  for( i = 0; i < 400*240; i++)
-  {
-    *p = l009_bootpic12[i];
-    p++;
-  }
-#endif
-  for( i = 0; i < 400*240; i++)
-  {
-    *p = l009_bootpic13[i];
-    p++;
-  }
-printf("%s %d\n",__FILE__,__LINE__);
- 
-#if 0
-  for( i = 0; i < 400*240; i++)
-  {
-    *p = l009_bootpic14[i];
-    p++;
-  }
-#endif
-  for( i = 0; i < 400*240; i++)
-  {
-    *p = l009_bootpic15[i];
-    p++;
-  }
-  printf("%s %d\n",__FILE__,__LINE__);
- 
-  flush_cache_all();
-#endif
-}
-#endif
 unsigned int mv = 0;
 int usb_detect_flag = 0;
 int read_count = 0;
@@ -589,9 +443,6 @@ int checkboard (void)
 	printf("%s Board: Ingenic CETUS (CPU Speed %d MHz)\n",__TIME__,
 	       gd->cpu_clk/1000000);
 
-#ifdef ADD_BOOTPIC 
-        ready_bootpic_mem();
-#endif
         return 0;
 
         printf(" %s %s mv is %d read_count is %d\n",__TIME__,__FUNCTION__,mv,read_count);
