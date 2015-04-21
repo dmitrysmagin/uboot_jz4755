@@ -1,1 +1,0 @@
-/home/kaka/dingux-320e/u-boot-1.1.6-dualboot/cpu/mips/cpu.c
