@@ -1,1 +1,0 @@
-/home/carlos/mount/workspace/workspace/uboot_tf/cpu/mips/start.S
