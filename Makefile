@@ -2683,6 +2683,7 @@ cetus_msc_config		:	unconfig
 	@echo "TEXT_BASE = 0x80100000" > $(obj)board/cetus/config.tmp
 	@echo "CONFIG_NAND_U_BOOT = y" >> $(obj)include/config.mk
 	@echo "CONFIG_MSC_U_BOOT = y"  >> $(obj)include/config.mk
+	@echo "CONFIG_MBR_UBOOT = y" >> $(obj)include/config.mk
 
 cetus_msc_recovery_config		:	unconfig
 	@echo "#define CONFIG_NAND_U_BOOT" > $(obj)include/config.h
@@ -3068,7 +3069,7 @@ clean:
 	rm -f $(obj)tools/easylogo/easylogo $(obj)tools/bmp_logo
 	rm -f $(obj)tools/gdb/astest $(obj)tools/gdb/gdbcont $(obj)tools/gdb/gdbsend
 	rm -f $(obj)tools/env/fw_printenv $(obj)tools/env/fw_setenv
-	rm -f $(obj)tools/mkuartconfig $(obj)tools/mkuartconfig
+	rm -f $(obj)tools/mkuartconfig $(obj)tools/mbr/mkmbr
 	rm -f $(obj)board/cray/L1/bootscript.c $(obj)board/cray/L1/bootscript.image
 	rm -f $(obj)board/netstar/eeprom $(obj)board/netstar/crcek $(obj)board/netstar/crcit
 	rm -f $(obj)board/netstar/*.srec $(obj)board/netstar/*.bin
